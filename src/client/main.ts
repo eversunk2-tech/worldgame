@@ -1,7 +1,10 @@
-import { Game } from './Game';
+import Phaser from 'phaser';
+import { gameConfig } from './config';
 
-const canvas = document.getElementById('game');
-if (!(canvas instanceof HTMLCanvasElement)) {
-  throw new Error('#game canvas not found');
+const game = new Phaser.Game(gameConfig);
+
+// Exposed for browser debugging / review tooling only (not used by game code).
+declare global {
+  interface Window { __play1?: Phaser.Game }
 }
-new Game(canvas).start();
+window.__play1 = game;

@@ -1,32 +1,40 @@
-// Physics / gameplay constants shared by client and (future) server.
+// Gameplay constants shared by client and (future) server. Pixel units unless noted.
 
-export const FIXED_DT = 1 / 60;
-export const MAX_STEPS_PER_FRAME = 5;
-export const MAX_FRAME_DT = 0.1;
+export const TILE_SIZE = 32;
+export const MAP_COLS = 40;
+export const MAP_ROWS = 30;
+export const MAP_WIDTH = MAP_COLS * TILE_SIZE;   // 1280
+export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;  // 960
 
-// Player movement
-export const MOVE_SPEED = 6;
-export const JUMP_SPEED = 9;
-export const GRAVITY = -25;          // max jump height ≈ 9²/(2·25) = 1.62m
-export const PLAYER_RADIUS = 0.5;
-export const PLAYER_HEIGHT = 1.8;
-export const STEP_TOLERANCE = 0.35;  // ledges this low are stepped onto without jumping
+// Player movement / body
+export const PLAYER_SPEED = 120;                       // px/s
+export const PLAYER_BODY = { w: 20, h: 16, offsetY: 14 } as const; // 발 부분만 충돌
 
-// Player life / combat
-export const RESPAWN_TIME = 3;
-export const ATTACK_COOLDOWN = 0.5;
-export const ATTACK_ANIM_TIME = 0.25;
-export const ATTACK_RANGE = 2.2;
-export const ATTACK_ARC = Math.PI / 2;  // 전방 90°
-export const INVULN_TIME = 0.5;
-export const HIT_FLASH_TIME = 0.15;
+// Combat
+export const ATTACK_COOLDOWN = 0.4;   // s
+export const ATTACK_ACTIVE = 0.15;    // s
+export const ATTACK_REACH = 24;       // px from player centre to hitbox centre
+export const ATTACK_BOX = 28;         // px, square hitbox side
+export const PLAYER_HP = 100;
+export const PLAYER_ATK = 10;
+export const INVULN_TIME = 0.6;       // s
+export const KNOCKBACK = 10;          // px
+export const FAINT_TIME = 2;          // s
+export const HIT_FLASH_TIME = 0.15;   // s
+export const MONSTER_ATTACK_LEAVE_FACTOR = 1.3;
+export const MONSTER_STUCK_TIME = 2;  // s without movement while chasing → return
 
-// NPC / quests
-export const NPC_INTERACT_RANGE = 3;
+// Interaction
+export const INTERACT_RANGE = 40;     // px
+export const ENTRANCE_GRACE = 1;      // s after spawn during which the exit zone is ignored
 
-// Map
-export const MAP_SIZE = 120;
-export const MAP_BOUND = 58;  // ±58 (바닥 120, 여유 2)
+// Points
+export const CARD_READ_POINTS = 5;
 
-// Monster AI
-export const MONSTER_ATTACK_LEAVE_FACTOR = 1.3;  // 3D dist > attackRange*1.3 → chase
+// Avatar room
+export const ROOM_COLS = 8;
+export const ROOM_ROWS = 6;
+
+// Minigame defaults
+export const QUIZ_COUNT = 5;
+export const QUIZ_PASS = 4;
