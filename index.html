@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>play1 — 3D RPG v0.1</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #87ceeb; }
+      #game { display: block; width: 100%; height: 100%; outline: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" tabindex="0"></canvas>
+    <div id="hud">
+      <div id="hud-top-left">
+        <div id="level">Lv 1</div>
+        <div class="bar hp"><div id="hp-fill" class="fill"></div><span id="hp-bar">HP 100/100</span></div>
+        <div class="bar xp"><div id="xp-fill" class="fill"></div><span id="xp-bar">XP 0/100</span></div>
+      </div>
+      <div id="hud-top-right">
+        <div id="quest-tracker"><div class="title">미션</div><div id="quest-list"></div></div>
+        <div id="save-indicator">저장됨</div>
+      </div>
+      <div id="interact-hint"></div>
+      <div id="dialog"><div id="dialog-name"></div><div id="dialog-text"></div></div>
+      <div id="log"></div>
+      <div id="damage-flash"></div>
+      <div id="death-overlay"><div id="death-text"></div></div>
+      <div id="hud-bottom-right">
+        <div id="controls">
+          <div>WASD 이동 · Space 점프</div>
+          <div>F 공격 · E 대화</div>
+          <div>좌클릭 드래그 회전 · 휠 줌</div>
+        </div>
+        <button id="reset-btn" type="button">진행 초기화</button>
+      </div>
+    </div>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>
