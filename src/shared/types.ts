@@ -12,11 +12,29 @@ export interface CityMarker {
 }
 export type UnlockRule = { type: 'always' } | { type: 'missionsTurnedIn'; missionIds: string[] };
 
+// ---------------------------------------------------------------- city theme / landmarks (spec 5.3, 5.4)
+export type BuildingStyle = 'village' | 'hanok' | 'parisian' | 'sandstone' | 'skyscraper' | 'colorful' | 'modern';
+export type TreeKind = 'round' | 'pine' | 'palm' | 'tropical' | 'plane' | 'gum';
+export type RoadStyle = 'dirt' | 'cobble' | 'asphalt';
+export type BgmId = 'world' | 'room' | 'seoul' | 'paris' | 'cairo' | 'newyork' | 'sydney' | 'rio';
+export interface CityTheme {
+  ground: 'grass' | 'sand'; road: RoadStyle; building: BuildingStyle; tree: TreeKind; streetTree: TreeKind;
+  water: 'river' | 'sea'; wall: 'stone' | 'hedge'; bgm: BgmId;
+}
+export type LandmarkKind =
+  | 'gyeongbokgung' | 'namsan_tower' | 'eiffel' | 'arc' | 'louvre' | 'notredame' | 'pyramids' | 'sphinx' | 'mosque' | 'museum'
+  | 'empire' | 'liberty' | 'opera' | 'harbour_bridge' | 'maracana' | 'christ' | 'sugarloaf';
+export interface LandmarkDef {
+  id: string; kind: LandmarkKind; at: TilePos; /* 좌상단 */ w: number; h: number;
+  overhang?: number; /* 위로 튀어나오는 타일 수 */ solid?: boolean; /* 기본 true: 사각형이 전부 'P' */
+}
+
 export interface LearnCard { id: string; cityId: CityId; topic: 'geo' | 'climate' | 'culture'; title: string; lines: string[] }
 export interface SignDef { id: string; cardId: string; at: TilePos }
 export interface NpcDef {
   id: string; name: string; role: 'guide' | 'teacher' | 'guard'; at: TilePos; facing: Facing;
   missionIds: string[]; idleText: string; cardId?: string; /* guide: 첫 대화에 학습 카드 표시 */
+  bubble: string; /* 말풍선 12자 이내 (spec 6.2) */
 }
 export interface MonsterZone { monsterId: string; center: TilePos; radiusTiles: number; count: number }
 export interface CityDef {
@@ -24,9 +42,10 @@ export interface CityDef {
   entrance: TilePos; /* 출입구 타일 */ spawn: TilePos; spawnFacing: Facing;
   cards: LearnCard[]; signs: SignDef[]; npcs: NpcDef[]; missions: MissionDef[]; monsterZones: MonsterZone[];
   stampMissionIds: string[]; /* 모두 turnedIn → 도장 */
+  theme: CityTheme; landmarks: LandmarkDef[];
 }
 
-export type MinigameKind = 'quiz' | 'ox'; // 'match' 등은 v0.2 후보
+export type MinigameKind = 'quiz' | 'ox'; // 'match' 등은 Stage B에서 확장
 export interface MinigameSpec { kind: MinigameKind; cityId: CityId; topics?: QuizTopic[]; count: number; passCount: number }
 export interface MinigameResult { kind: MinigameKind; success: boolean; correct: number; total: number; answeredIds: string[] }
 export type MissionObjective = { type: 'minigame'; spec: MinigameSpec } | { type: 'defeat'; monsterId: string; count: number };
@@ -56,6 +75,16 @@ export interface ItemDef {
 
 export interface AvatarEquip { body: string; hair: string; top: string; hat: string | null }
 export interface RoomPlacement { itemId: string; gx: number; gy: number }
+
+/** Emoji reactions (spec 6.3). Serialized as ids so a future server can broadcast them. */
+export type EmoteId = 'smile' | 'heart' | 'laugh' | 'wow' | 'thumbs' | 'question';
+
+/** Reserved for multiplayer presence (spec 10.10). Not used by v0.2 code paths. */
+export interface PresenceSnapshot {
+  id: string; name: string; cityId: CityId; x: number; y: number; facing: Facing; moving: boolean;
+  avatar: AvatarEquip; emote?: EmoteId;
+}
+
 export interface Progress {
   profile: { name: string; createdAt: number };
   points: number; totalEarned: number;
@@ -63,5 +92,6 @@ export interface Progress {
   stamps: CityId[]; readCards: string[];
   avatar: AvatarEquip; owned: string[]; room: RoomPlacement[];
   lastCity: CityId | null;
-  stats: { defeated: number; quizAnswered: number; quizCorrect: number };
+  settings: { muted: boolean };
+  stats: { defeated: number; quizAnswered: number; quizCorrect: number; minigames: number };
 }

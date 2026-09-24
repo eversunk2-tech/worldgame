@@ -105,5 +105,12 @@ export function applyAction(progress: Progress, action: Action): ProgressEvent[]
       events.push({ type: 'room.changed' });
       return events;
     }
+    case 'settings.setMuted': {
+      const muted = action.muted === true;
+      if (progress.settings.muted === muted) return events;
+      progress.settings.muted = muted;
+      events.push({ type: 'settings.changed', muted });
+      return events;
+    }
   }
 }

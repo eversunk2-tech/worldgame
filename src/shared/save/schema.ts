@@ -1,15 +1,15 @@
-// Save format v2 (spec 6.8): validation, (de)serialization, migration skeleton. No storage access here.
+// Save format v3 (spec 9): validation, (de)serialization, migration v2 → v3. No storage access here.
 import type { AvatarEquip, CityId, MissionProgress, MissionStatus, Progress, RoomPlacement } from '../types';
-import { ALL_MISSIONS, getCard, isPlayableCityId } from '../content';
+import { ALL_MISSIONS, getCard, isPlayableCityId, PLAYABLE_CITIES } from '../content';
 import { getItem, STARTER_ITEM_IDS, defaultForSlot } from '../content/items';
 import { canPlace } from '../logic/inventory';
 import { createMissionTable, normalizeName } from '../logic/progress';
 
 export const SAVE_KEY = 'play1.progress';
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const LEGACY_KEYS = ['play1.save'];
 
-export interface SaveData { version: 2; savedAt: number; progress: Progress }
+export interface SaveData { version: 3; savedAt: number; progress: Progress }
 
 const MISSION_STATUSES: readonly MissionStatus[] = ['locked', 'available', 'active', 'completed', 'turnedIn'];
 
@@ -33,6 +33,20 @@ function validateMissions(raw: unknown): Record<string, MissionProgress> {
     };
   }
   return table;
+}
+
+/**
+ * A stamp proves its missions were turned in: if a corrupt status made one of them fall back to its default,
+ * force it back to `turnedIn` so points/stamps and the mission table cannot disagree (v0.1 review, low #10).
+ */
+function reconcileStamps(missions: Record<string, MissionProgress>, stamps: readonly CityId[]): void {
+  for (const city of PLAYABLE_CITIES) {
+    if (!stamps.includes(city.id)) continue;
+    for (const mid of city.stampMissionIds) {
+      const prog = missions[mid];
+      if (prog && prog.status !== 'turnedIn') prog.status = 'turnedIn';
+    }
+  }
 }
 
 function validateOwned(raw: unknown): string[] {
@@ -73,7 +87,7 @@ function validateRoom(raw: unknown, base: Progress): RoomPlacement[] {
   return probe.room;
 }
 
-/** Structural + referential validation. Returns null when the save is unusable; otherwise a cleaned copy. */
+/** Structural + referential validation of a v3 save. Returns null when unusable; otherwise a cleaned copy. */
 export function validate(raw: unknown): SaveData | null {
   if (!isObj(raw)) return null;
   if (raw.version !== SAVE_VERSION) return null;
@@ -81,6 +95,7 @@ export function validate(raw: unknown): SaveData | null {
   if (!isObj(p)) return null;
   const profile = isObj(p.profile) ? p.profile : {};
   const stats = isObj(p.stats) ? p.stats : {};
+  const settings = isObj(p.settings) ? p.settings : {};
   const savedAt = typeof raw.savedAt === 'number' && Number.isFinite(raw.savedAt) ? raw.savedAt : 0;
 
   const owned = validateOwned(p.owned);
@@ -92,6 +107,9 @@ export function validate(raw: unknown): SaveData | null {
   const readCards: string[] = [];
   if (Array.isArray(p.readCards)) for (const c of p.readCards) if (typeof c === 'string' && getCard(c) && !readCards.includes(c)) readCards.push(c);
 
+  const missions = validateMissions(p.missions);
+  reconcileStamps(missions, stamps);
+
   const progress: Progress = {
     profile: {
       name: normalizeName(profile.name),
@@ -99,31 +117,41 @@ export function validate(raw: unknown): SaveData | null {
     },
     points,
     totalEarned,
-    missions: validateMissions(p.missions),
+    missions,
     stamps,
     readCards,
     avatar: validateAvatar(p.avatar, owned),
     owned,
     room: [],
     lastCity: isPlayableCityId(p.lastCity) ? p.lastCity : null,
+    settings: { muted: settings.muted === true },
     stats: {
       defeated: nonNegInt(stats.defeated),
       quizAnswered: nonNegInt(stats.quizAnswered),
       quizCorrect: nonNegInt(stats.quizCorrect),
+      minigames: nonNegInt(stats.minigames),
     },
   };
   progress.room = validateRoom(p.room, progress);
   return { version: SAVE_VERSION, savedAt, progress };
 }
 
-/** Upgrade older formats to the current version, then validate. Only v2 exists in v0.1. */
+/** Upgrade older formats to the current version, then validate. v2 (v0.1) → v3 adds settings + stats.minigames. */
 export function migrate(raw: unknown): SaveData | null {
   if (!isObj(raw)) return null;
-  const version = raw.version;
-  switch (version) {
+  switch (raw.version) {
     case SAVE_VERSION:
       return validate(raw);
-    // case 3: future — e.g. add profile.id, then fall through to validate
+    case 2: {
+      const p = isObj(raw.progress) ? raw.progress : {};
+      const stats = isObj(p.stats) ? p.stats : {};
+      const upgraded = {
+        ...raw,
+        version: SAVE_VERSION,
+        progress: { ...p, settings: { muted: false }, stats: { ...stats, minigames: 0 } },
+      };
+      return validate(upgraded);
+    }
     default:
       return null;
   }

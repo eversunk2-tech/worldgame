@@ -1,4 +1,4 @@
-// Paris city content (spec 6.3, 6.4). Map rows are 30 × 40 chars, legend in content/tiles.ts.
+// Paris city content (v0.2 spec A.2). Map rows are 30 × 40 chars, legend in content/tiles.ts (27 kinds).
 import type { CityDef } from '../../types';
 import { QUIZ_COUNT, QUIZ_PASS } from '../../constants';
 
@@ -6,25 +6,32 @@ export const PARIS: CityDef = {
   id: 'paris',
   name: '파리',
   continent: 'europe',
+  theme: { ground: 'grass', road: 'cobble', building: 'parisian', tree: 'round', streetTree: 'plane', water: 'river', wall: 'hedge', bgm: 'paris' },
+  landmarks: [
+    { id: 'lm_paris_arc', kind: 'arc', at: { tx: 4, ty: 5 }, w: 2, h: 2, overhang: 1 },
+    { id: 'lm_paris_louvre', kind: 'louvre', at: { tx: 24, ty: 3 }, w: 8, h: 3, overhang: 1 },
+    { id: 'lm_paris_notredame', kind: 'notredame', at: { tx: 23, ty: 16 }, w: 2, h: 2, overhang: 2 },
+    { id: 'lm_paris_eiffel', kind: 'eiffel', at: { tx: 4, ty: 21 }, w: 2, h: 2, overhang: 3 },
+  ],
   rows: [
     'RRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR',
     'RRRRRRRTTRRRTTTRRRRTTRRRRRRTTTRRRRRRTTRR',
     'TRRRR..................................T',
-    'T.......##..##..........########.......T',
-    'T.......##..##..........########.......T',
-    'T...PP..........==......########..==...T',
-    'T...PP..........==..............*.==...T',
-    'T...............==................==...T',
-    'T.=============.==..............*.==...T',
-    'T...............==......####....*.==...T',
+    'T.......##..##..........PPPPPPPP.......T',
+    'T.......##..##..........PPPPPPPP.......T',
+    'T...PP..........==......PPPPPPPP..==...T',
+    'T...PP..........==..............t.==...T',
+    'T.......*.......==..l...........t.==...T',
+    'T.=============.==..####........t.==...T',
+    'T.......l.......==..####........t.==...T',
     'T=====================================.E',
     'T...**..........==....**....**....==...T',
     'T..####.........==....####..####..==...T',
     'T..####.........==....####..####..==...T',
-    'T...............==................==...T',
+    'T.......b.......==..........b.....==...T',
     'T~~~~~~~~~~~~~~~BB~~BB~~~~~~~~~~~~BB~~~T',
-    'T~~~~~~~~~~~~~..BB.....##.~~~~~~~~BB~~~T',
-    'T~~~~~~~~~~~~~..BB.....##.~~~~~~~~BB~~~T',
+    'T~~~~~~~~~~~~~..BB.....PP.~~~~~~~~BB~~~T',
+    'T~~~~~~~~~~~~~..BB.....PP.~~~~~~~~BB~~~T',
     'T~~~~~~~~~~~~~~~BB~~BB~~~~~~~~~~~~BB~~~T',
     'T...............==................==...T',
     'T====================================..T',
@@ -33,7 +40,7 @@ export const PARIS: CityDef = {
     'T..............,,,,,,........T.,,,,,...T',
     'T....,,,.......,,,,,,..........,,,,,...T',
     'T...,,,,,.......,,,,......T.....,,,....T',
-    'T....,,,..........................T....T',
+    'T....,,,....l.....................T....T',
     'T.......T.............T................T',
     'T......................................T',
     'TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT',
@@ -81,17 +88,18 @@ export const PARIS: CityDef = {
   npcs: [
     {
       id: 'npc_marie', name: '마리', role: 'guide', at: { tx: 36, ty: 8 }, facing: 'down',
-      missionIds: ['m_paris_quiz'], cardId: 'card_paris_geo',
+      missionIds: ['m_paris_quiz'], cardId: 'card_paris_geo', bubble: '봉주르!',
       idleText: '봉주르! 파리에 온 걸 환영해. 센강 다리를 건너면 에펠탑이 보여.',
     },
     {
       id: 'npc_louis', name: '루이', role: 'teacher', at: { tx: 27, ty: 7 }, facing: 'down',
-      missionIds: ['m_paris_ox'],
+      missionIds: ['m_paris_ox'], bubble: '루브르야!',
       idleText: '여기는 루브르 박물관이야. 모나리자가 이 안에 있지.',
     },
     {
-      id: 'npc_pierre', name: '피에르', role: 'guard', at: { tx: 14, ty: 19 }, facing: 'down',
-      missionIds: ['m_paris_defeat'],
+      // (14,19) in v0.1 → (12,19): keeps 96px+ from the pigeon zone at (18,23) (spec A.2)
+      id: 'npc_pierre', name: '피에르', role: 'guard', at: { tx: 12, ty: 19 }, facing: 'down',
+      missionIds: ['m_paris_defeat'], bubble: '비둘기 조심!',
       idleText: '에펠탑 공원의 비둘기들이 빵 부스러기를 노리고 있어. 조심해!',
     },
   ],

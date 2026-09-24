@@ -27,7 +27,8 @@ export function createProgress(name: string = DEFAULT_NAME, createdAt = 0): Prog
     owned: [...STARTER_ITEM_IDS],
     room: [],
     lastCity: null,
-    stats: { defeated: 0, quizAnswered: 0, quizCorrect: 0 },
+    settings: { muted: false },
+    stats: { defeated: 0, quizAnswered: 0, quizCorrect: 0, minigames: 0 },
   };
 }
 

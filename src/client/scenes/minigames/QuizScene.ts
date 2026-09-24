@@ -32,7 +32,7 @@ export class QuizScene extends MinigameBaseScene {
     this.buttons = [];
     if (item.kind !== 'choice') return;
     item.choices.forEach((text, i) => {
-      const b = new Button(this, 0, i * 60, `${i + 1}. ${text}`, { width: 760, height: 50, fontSize: 18, onClick: () => this.choose(i) });
+      const b = new Button(this, 0, i * 60, `${i + 1}. ${text}`, { width: 760, height: 50, onClick: () => this.choose(i) });
       this.buttons.push(b);
       this.answerArea.add(b);
     });

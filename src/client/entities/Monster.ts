@@ -1,14 +1,18 @@
-// Monster: FSM idle/chase/attack/return/dead driven by the pure decideMonsterState (spec 6.5, 7.5).
+// Monster: FSM idle/chase/attack/return/dead driven by the pure decideMonsterState (spec 5.7). v0.2: code-drawn
+// 16-grid art (monsterArt.ts), shadow, velocity-based knockback, hit/defeat SFX.
 import Phaser from 'phaser';
 import type { Facing, MonsterDef } from '../../shared/types';
 import { HIT_FLASH_TIME, KNOCKBACK, MONSTER_STUCK_TIME } from '../../shared/constants';
 import { decideMonsterState, hitMonster, type MonsterAiState } from '../../shared/logic/combat';
 import { animKey, ensureCharAnims } from '../assets/avatarCompositor';
 import { TEX } from '../assets/manifest';
+import { sfx } from '../audio/sfx';
+import { ActorDecor } from './ActorDecor';
 import type { Player } from './Player';
 
 const HOME_EPS = 4;
 const HP_BAR_W = 24;
+const KNOCK_TIME = 0.08;
 
 export class Monster extends Phaser.Physics.Arcade.Sprite {
   readonly def: MonsterDef;
@@ -24,9 +28,13 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
   private lastY: number;
   private idleT = 0;
   private readonly hpBar: Phaser.GameObjects.Graphics;
+  private readonly decor: ActorDecor;
   private lastHpDrawn = -1;
   private facing: Facing = 'down';
   private moving = false;
+  private knockLeft = 0;
+  private knockVx = 0;
+  private knockVy = 0;
   /** Called when the monster dies (scene dispatches monster.defeated). */
   onDefeated: ((m: Monster) => void) | null = null;
   /** Called when the monster lands a hit on the player. */
@@ -49,6 +57,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     body.setOffset(6, 12);
     this.setCollideWorldBounds(true);
     this.hpBar = scene.add.graphics();
+    this.decor = ActorDecor.attach(scene, this);
     this.play(animKey(key, 'idle', 'down'));
   }
 
@@ -66,6 +75,16 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     if (this.ai === 'dead') {
       this.respawnLeft -= dt;
       if (this.respawnLeft <= 0) this.respawn();
+      return;
+    }
+
+    // knockback: a short velocity burst (same approach as the player), so Arcade keeps us out of walls
+    if (this.knockLeft > 0) {
+      this.knockLeft -= dt;
+      this.setVelocity(this.knockVx, this.knockVy);
+      this.setDepth(this.y);
+      this.decor.update();
+      this.drawHpBar();
       return;
     }
 
@@ -122,6 +141,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     }
     this.updateAnim();
     this.setDepth(this.y);
+    this.decor.update();
     this.drawHpBar();
   }
 
@@ -178,8 +198,10 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     const dx = this.x - fromX;
     const dy = this.y - fromY;
     const len = Math.hypot(dx, dy) || 1;
-    this.x += (dx / len) * KNOCKBACK;
-    this.y += (dy / len) * KNOCKBACK;
+    this.knockVx = (dx / len) * (KNOCKBACK / KNOCK_TIME);
+    this.knockVy = (dy / len) * (KNOCKBACK / KNOCK_TIME);
+    this.knockLeft = KNOCK_TIME;
+    sfx.hit();
     if (this.ai === 'idle') this.enter('chase');
     if (r.dead) {
       this.die();
@@ -192,8 +214,11 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
   private die(): void {
     this.ai = 'dead';
     this.respawnLeft = this.def.respawnTime;
+    this.knockLeft = 0;
     this.setVelocity(0, 0);
     this.clearTint();
+    sfx.defeat();
+    this.decor.setVisible(false);
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.enable = false;
     this.hpBar.clear();
@@ -219,6 +244,8 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     body.enable = true;
     body.reset(this.spawnX, this.spawnY);
     this.scene.tweens.add({ targets: this, alpha: 1, duration: 200 });
+    this.decor.setVisible(true);
+    this.decor.update();
   }
 
   /** Hold still (dialog / learn card open): no movement, no attacks, FSM not advanced this frame. */
@@ -228,6 +255,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
     this.moving = false;
     this.updateAnim();
     this.hpBar.setPosition(this.x, this.y);
+    this.decor.update();
   }
 
   /** Forced retreat (player fainted). */
@@ -237,6 +265,7 @@ export class Monster extends Phaser.Physics.Arcade.Sprite {
 
   override destroy(fromScene?: boolean): void {
     this.hpBar.destroy();
+    this.decor.destroy();
     super.destroy(fromScene);
   }
 }

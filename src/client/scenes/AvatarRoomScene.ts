@@ -1,4 +1,5 @@
-// Avatar room: profile, preview, shop (hair/top/hat/furniture), 8×6 furniture grid (spec 6.7).
+// Avatar room: profile, preview, shop (hair/top/hat/furniture), 8×6 furniture grid (spec 5.10). v0.2: Indoors
+// atlas floor/wall, 3× furniture textures, 6× preview, part icons on shop cards, room BGM, speaker button.
 import Phaser from 'phaser';
 import type { ItemDef, ItemSlot } from '../../shared/types';
 import { ROOM_COLS, ROOM_ROWS } from '../../shared/constants';
@@ -6,8 +7,11 @@ import { getMarker } from '../../shared/content/continents';
 import { getItem, itemsForSlot } from '../../shared/content/items';
 import { canPlace, footprint } from '../../shared/logic/inventory';
 import type { ProgressEvent } from '../../shared/logic/reducer';
-import { animKey, textureKeyFor } from '../assets/avatarCompositor';
+import { animKey, partIconKey, textureKeyFor } from '../assets/avatarCompositor';
 import { TEX } from '../assets/manifest';
+import { atlases } from '../assets/tileAtlas';
+import { UI } from '../assets/uiSkin';
+import { bgm } from '../audio/bgm';
 import { GAME_HEIGHT } from '../config';
 import { session } from '../session';
 import { Button } from '../ui/Button';
@@ -15,14 +19,17 @@ import { Panel } from '../ui/Panel';
 import { textStyle, THEME } from '../ui/theme';
 
 const CELL = 48;
-const GRID_X = 436;
-const GRID_Y = 24;
+const ROOM_X = 308;
+const ROOM_Y = 12;
+const GRID_X = ROOM_X + 16;      // 324
+const GRID_Y = ROOM_Y + 22 + CELL; // wall band (1 row) sits above the grid
 const GRID_W = ROOM_COLS * CELL; // 384
 const GRID_H = ROOM_ROWS * CELL; // 288
-const SHOP_X = 308;
-const SHOP_Y = 332;
+const ROOM_H = 22 + CELL + GRID_H + 12;
+const SHOP_X = ROOM_X;
+const SHOP_Y = ROOM_Y + ROOM_H + 6;
 const CARD_W = 150;
-const CARD_H = 44;
+const CARD_H = 40;
 const TABS: { slot: Exclude<ItemSlot, 'body'>; name: string }[] = [
   { slot: 'hair', name: '머리' }, { slot: 'top', name: '옷' }, { slot: 'hat', name: '모자' }, { slot: 'furniture', name: '가구' },
 ];
@@ -32,7 +39,6 @@ export class AvatarRoomScene extends Phaser.Scene {
   private tabButtons: Button[] = [];
   private cards: Phaser.GameObjects.Container[] = [];
   private placed: Phaser.GameObjects.Image[] = [];
-  private roomGfx!: Phaser.GameObjects.Graphics;
   private preview!: Phaser.GameObjects.Sprite;
   private previewWalking = false;
   private nameText!: Phaser.GameObjects.Text;
@@ -40,9 +46,10 @@ export class AvatarRoomScene extends Phaser.Scene {
   private pointsText!: Phaser.GameObjects.Text;
   private stampText!: Phaser.GameObjects.Text;
   private message!: Phaser.GameObjects.Text;
+  private speaker!: Phaser.GameObjects.Image;
   private messageUntil = 0;
   private placing: { item: ItemDef; ghost: Phaser.GameObjects.Image } | null = null;
-  private escKey!: Phaser.Input.Keyboard.Key;
+  private keys!: { esc: Phaser.Input.Keyboard.Key; n: Phaser.Input.Keyboard.Key };
   private readonly onProgress = (e: ProgressEvent) => this.handleEvent(e);
 
   constructor() {
@@ -57,29 +64,30 @@ export class AvatarRoomScene extends Phaser.Scene {
 
     // --- profile panel
     const prof = new Panel(this, 12, 12, { width: 280, height: GAME_HEIGHT - 24, title: '프로필' });
-    this.nameText = this.add.text(140, 50, '', textStyle({ fontSize: '20px', fontStyle: 'bold', color: THEME.accentCss })).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+    this.nameText = this.add.text(140, 46, '', textStyle({ size: 'title', color: THEME.accentCss })).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
     this.nameText.on('pointerdown', () => this.renameProfile());
-    this.rankText = this.add.text(140, 80, '', textStyle({ color: THEME.textDim })).setOrigin(0.5, 0);
-    const coin = this.add.image(110, 116, TEX.icon('coin'));
-    this.pointsText = this.add.text(126, 106, '', textStyle({ fontSize: '18px', color: THEME.accentCss }));
-    this.stampText = this.add.text(140, 140, '', textStyle({ fontSize: '14px', align: 'center', wordWrap: { width: 250 } })).setOrigin(0.5, 0);
+    this.rankText = this.add.text(140, 78, '', textStyle({ size: 'small', color: THEME.textDim })).setOrigin(0.5, 0);
+    const coin = this.add.image(104, 110, TEX.icon('coin')).setScale(0.7);
+    this.pointsText = this.add.text(122, 100, '', textStyle({ color: THEME.accentCss }));
+    this.stampText = this.add.text(140, 130, '', textStyle({ size: 'small', align: 'center', wordWrap: { width: 250 } })).setOrigin(0.5, 0);
     prof.add([this.nameText, this.rankText, coin, this.pointsText, this.stampText]);
 
-    const pvBg = this.add.graphics();
-    pvBg.fillStyle(0x1b1b2f, 1).fillRoundedRect(76, 190, 128, 140, 6).lineStyle(1, THEME.border, 0.5).strokeRoundedRect(76, 190, 128, 140, 6);
+    const pvBg = this.add.nineslice(76, 182, UI.panelLight, undefined, 128, 150, UI.slice, UI.slice, UI.slice, UI.slice).setOrigin(0, 0);
     prof.add(pvBg);
-    this.preview = this.add.sprite(140, 262, textureKeyFor(this, session.progress.avatar), 1).setScale(3);
+    // 16px composite frames drawn at 6× (3× the 2× sheet) — integer multiple, crisp (spec 5.10)
+    this.preview = this.add.sprite(140, 258, textureKeyFor(this, session.progress.avatar), 1).setScale(3);
     prof.add(this.preview);
-    const walkBtn = new Button(this, 90, 340, '걷기 애니 켜기', { width: 100, height: 30, fontSize: 13, onClick: () => this.togglePreview(walkBtn) });
+    const walkBtn = new Button(this, 90, 340, '걷기 애니 켜기', { width: 100, height: 30, size: 'small', onClick: () => this.togglePreview(walkBtn) });
     prof.add(walkBtn);
-    prof.add(this.add.text(140, 385, '이름을 클릭하면 바꿀 수 있어요', textStyle({ fontSize: '12px', color: THEME.textDim })).setOrigin(0.5, 0));
+    prof.add(this.add.text(140, 380, '이름을 클릭하면 바꿀 수 있어요', textStyle({ size: 'small', color: THEME.textDim })).setOrigin(0.5, 0));
     prof.add(new Button(this, 40, GAME_HEIGHT - 24 - 60, '세계지도로 (Esc)', { width: 200, height: 40, onClick: () => this.leave() }));
 
-    // --- room panel
-    new Panel(this, SHOP_X, 12, { width: 640, height: 312 });
-    this.roomGfx = this.add.graphics();
+    // --- room panel: title above the wall band (v0.1 review low #10: no overlap with the wall)
+    new Panel(this, ROOM_X, ROOM_Y, { width: 640, height: ROOM_H });
+    this.add.text(ROOM_X + 16, ROOM_Y + 5, '아바타 룸 — 가구를 클릭하면 회수해요', textStyle({ size: 'bold', color: THEME.textDim }));
+    this.speaker = this.add.image(ROOM_X + 640 - 22, ROOM_Y + 12, TEX.icon(session.muted ? 'speakerOff' : 'speakerOn')).setScale(0.75).setInteractive({ useHandCursor: true });
+    this.speaker.on('pointerdown', () => session.setMuted(!session.muted));
     this.drawRoom();
-    this.add.text(SHOP_X + 12, 18, '아바타 룸 (가구를 클릭해 회수)', textStyle({ fontSize: '13px', color: THEME.textDim }));
     const gridZone = this.add.zone(GRID_X, GRID_Y, GRID_W, GRID_H).setOrigin(0, 0).setInteractive();
     gridZone.on('pointermove', (p: Phaser.Input.Pointer) => this.onGridMove(p));
     gridZone.on('pointerdown', (p: Phaser.Input.Pointer) => this.onGridClick(p));
@@ -87,15 +95,17 @@ export class AvatarRoomScene extends Phaser.Scene {
     // --- shop panel
     new Panel(this, SHOP_X, SHOP_Y, { width: 640, height: GAME_HEIGHT - SHOP_Y - 12 });
     TABS.forEach((t, i) => {
-      const b = new Button(this, SHOP_X + 12 + i * 110, SHOP_Y + 10, t.name, { width: 100, height: 28, fontSize: 14, onClick: () => this.selectTab(t.slot) });
+      const b = new Button(this, SHOP_X + 12 + i * 110, SHOP_Y + 8, t.name, { width: 100, height: 28, size: 'small', onClick: () => this.selectTab(t.slot) });
       this.tabButtons.push(b);
     });
-    this.message = this.add.text(SHOP_X + 628, GAME_HEIGHT - 18, '', textStyle({ fontSize: '14px', color: THEME.dangerCss })).setOrigin(1, 1);
+    this.message = this.add.text(SHOP_X + 628, GAME_HEIGHT - 16, '', textStyle({ size: 'small', color: THEME.dangerCss })).setOrigin(1, 1);
 
-    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    const K = Phaser.Input.Keyboard.KeyCodes;
+    this.keys = { esc: this.input.keyboard!.addKey(K.ESC), n: this.input.keyboard!.addKey(K.N) };
     this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => { if (p.rightButtonDown()) this.cancelPlacing(); });
 
+    bgm.play('room');
     session.events.on('any', this.onProgress);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       session.events.off('any', this.onProgress);
@@ -109,10 +119,11 @@ export class AvatarRoomScene extends Phaser.Scene {
   }
 
   override update(time: number): void {
-    if (Phaser.Input.Keyboard.JustDown(this.escKey)) {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.esc)) {
       if (this.placing) this.cancelPlacing();
       else this.leave();
     }
+    if (Phaser.Input.Keyboard.JustDown(this.keys.n)) session.setMuted(!session.muted);
     if (this.messageUntil && time > this.messageUntil) { this.messageUntil = 0; this.message.setText(''); }
   }
 
@@ -150,16 +161,23 @@ export class AvatarRoomScene extends Phaser.Scene {
   // ------------------------------------------------------------ room
 
   private drawRoom(): void {
-    const g = this.roomGfx;
-    g.clear();
-    g.fillStyle(0x6d5a8a, 1).fillRect(GRID_X, GRID_Y - 8, GRID_W, 8); // wall top
+    const room = atlases.room;
+    const frame = (name: string) => (room && room.has(name) ? name : undefined);
+    // wall band (one row above the floor), alternating wainscot halves
+    for (let gx = 0; gx < ROOM_COLS; gx++) {
+      const f = frame(gx % 2 === 0 ? 'wall_top_a' : 'wall_top_b');
+      if (room && f) this.add.image(GRID_X + gx * CELL, GRID_Y - CELL, room.key, f).setOrigin(0, 0);
+      else this.add.rectangle(GRID_X + gx * CELL, GRID_Y - CELL, CELL, CELL, 0x6d5a8a, 1).setOrigin(0, 0);
+    }
     for (let gy = 0; gy < ROOM_ROWS; gy++) {
       for (let gx = 0; gx < ROOM_COLS; gx++) {
-        g.fillStyle((gx + gy) % 2 === 0 ? 0xc9a77a : 0xb8935f, 1);
-        g.fillRect(GRID_X + gx * CELL, GRID_Y + gy * CELL, CELL, CELL);
+        const f = frame('floor_wood');
+        if (room && f) this.add.image(GRID_X + gx * CELL, GRID_Y + gy * CELL, room.key, f).setOrigin(0, 0);
+        else this.add.rectangle(GRID_X + gx * CELL, GRID_Y + gy * CELL, CELL, CELL, (gx + gy) % 2 === 0 ? 0xc9a77a : 0xb8935f, 1).setOrigin(0, 0);
       }
     }
-    g.lineStyle(1, 0x000000, 0.15);
+    const g = this.add.graphics();
+    g.lineStyle(1, 0x000000, 0.12);
     for (let i = 0; i <= ROOM_COLS; i++) g.lineBetween(GRID_X + i * CELL, GRID_Y, GRID_X + i * CELL, GRID_Y + GRID_H);
     for (let i = 0; i <= ROOM_ROWS; i++) g.lineBetween(GRID_X, GRID_Y + i * CELL, GRID_X + GRID_W, GRID_Y + i * CELL);
   }
@@ -243,7 +261,7 @@ export class AvatarRoomScene extends Phaser.Scene {
       const col = i % 4;
       const row = Math.floor(i / 4);
       const x = SHOP_X + 12 + col * (CARD_W + 8);
-      const y = SHOP_Y + 48 + row * (CARD_H + 8);
+      const y = SHOP_Y + 44 + row * (CARD_H + 6);
       const owned = p.owned.includes(item.id);
       const equipped = item.slot !== 'furniture' && p.avatar[item.slot] === item.id;
       const placed = item.slot === 'furniture' && p.room.some((r) => r.itemId === item.id);
@@ -251,19 +269,19 @@ export class AvatarRoomScene extends Phaser.Scene {
       const affordable = owned || (!item.unlockStamp && p.points >= item.price);
 
       const c = this.add.container(x, y);
-      const bg = this.add.graphics();
+      const bg = this.add.nineslice(0, 0, UI.btn, undefined, CARD_W, CARD_H, UI.slice, UI.slice, UI.slice, UI.slice).setOrigin(0, 0);
       const draw = (hover: boolean) => {
-        bg.clear();
-        bg.fillStyle(equipped || placed ? 0x3f6b4a : hover ? 0x545a9a : 0x3d4270, 1).fillRoundedRect(0, 0, CARD_W, CARD_H, 4);
-        bg.lineStyle(1, equipped || placed ? THEME.success : affordable ? THEME.border : 0x666a8a, 1).strokeRoundedRect(0, 0, CARD_W, CARD_H, 4);
+        bg.setTexture(equipped || placed ? UI.btnSelected : hover ? UI.btnHover : UI.btn);
+        bg.clearTint();
+        if (equipped || placed) bg.setTint(0x6bd77b);
+        else if (!affordable) bg.setAlpha(0.7); else bg.setAlpha(1);
       };
       draw(false);
       const icon = item.slot === 'furniture'
         ? this.add.image(22, CARD_H / 2, TEX.furniture(item.id)).setDisplaySize(28, 28)
-        : this.add.image(22, CARD_H / 2, TEX.layer(item.id), 1).setScale(1.2);
-      const name = this.add.text(44, 6, item.name, textStyle({ fontSize: '12px', wordWrap: { width: CARD_W - 48 } }));
-      if (name.height > 18) name.setFontSize(10);
-      const st = this.add.text(44, CARD_H - 6, status, textStyle({ fontSize: '11px', color: equipped || placed ? THEME.successCss : owned ? THEME.textDim : affordable ? THEME.accentCss : '#8a8a8a' })).setOrigin(0, 1);
+        : this.add.image(22, CARD_H / 2, partIconKey(this, item.id));
+      const name = this.add.text(44, 5, item.name.length > 9 ? `${item.name.slice(0, 9)}…` : item.name, textStyle({ size: 'small' }));
+      const st = this.add.text(44, CARD_H - 4, status, textStyle({ size: 'small', color: equipped || placed ? THEME.successCss : owned ? THEME.textDim : affordable ? THEME.accentCss : '#8a8a8a' })).setOrigin(0, 1);
       c.add([bg, icon, name, st]);
       c.setSize(CARD_W, CARD_H);
       c.setInteractive(new Phaser.Geom.Rectangle(CARD_W / 2, CARD_H / 2, CARD_W, CARD_H), Phaser.Geom.Rectangle.Contains);
@@ -324,6 +342,9 @@ export class AvatarRoomScene extends Phaser.Scene {
       case 'room.changed':
         this.refreshRoom();
         this.refreshShop();
+        break;
+      case 'settings.changed':
+        this.speaker.setTexture(TEX.icon(e.muted ? 'speakerOff' : 'speakerOn'));
         break;
       default:
         break;

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>tile-index — Kenney 시트 인덱스 조사 도구</title>
+<style>
+  html, body { margin: 0; background: #1b1b2f; color: #eee; font: 13px/1.4 system-ui, sans-serif; }
+  #bar { position: sticky; top: 0; z-index: 2; display: flex; gap: 12px; align-items: center; padding: 6px 10px; background: #2b2d4a; border-bottom: 2px solid #8f9bff; }
+  body.compact #bar { padding: 2px 6px; font-size: 11px; gap: 8px; white-space: nowrap; overflow: hidden; }
+  body.compact #preview { width: 32px; height: 32px; }
+  body.compact #side, body.compact #sheets { display: none; }
+  #bar code { background: #1b1b2f; padding: 2px 6px; border-radius: 3px; }
+  #layout { display: flex; gap: 12px; align-items: flex-start; }
+  #wrap { overflow: auto; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  #sheet { cursor: crosshair; }
+  #preview { width: 128px; height: 128px; border: 1px solid #8f9bff; background:
+    repeating-conic-gradient(#333 0 25%, #444 0 50%) 0 0 / 16px 16px; }
+  #side { position: sticky; top: 44px; width: 300px; flex: none; padding: 8px; background: #2b2d4a; border-left: 2px solid #8f9bff; max-height: calc(100vh - 60px); overflow: auto; }
+  #side ul { list-style: none; padding: 0; margin: 0 0 8px; }
+  #side li { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  #side input { width: 150px; background: #1b1b2f; color: #fff; border: 1px solid #8f9bff; padding: 2px 4px; }
+  #side button, #bar button { background: #3d4270; color: #fff; border: 1px solid #8f9bff; padding: 3px 8px; cursor: pointer; }
+  textarea { width: 100%; height: 160px; background: #1b1b2f; color: #ffd166; border: 1px solid #8f9bff; font: 12px monospace; }
+  .cell-preview { width: 32px; height: 32px; }
+  a { color: #ffd166; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <strong id="title">tile-index</strong>
+  <span id="info">manifest 로딩 중…</span>
+  <canvas id="preview" width="16" height="16"></canvas>
+  <span id="hover">(hover)</span>
+  <span>sheet: <code id="sheets"></code></span>
+</div>
+<div id="layout">
+  <div id="wrap"><canvas id="sheet"></canvas></div>
+  <div id="side">
+    <div><strong>선택한 칸</strong> (클릭으로 추가 · idx는 클립보드에 복사됨)</div>
+    <ul id="list"></ul>
+    <button id="export">JSON 내보내기</button>
+    <button id="clear">비우기</button>
+    <textarea id="out" placeholder="{ &quot;name&quot;: idx, ... }"></textarea>
+    <p>사용: <code>?sheet=kenney-roguelike-rpg&amp;scale=4</code><br>
+      부분 보기: <code>&amp;region=col0,row0,cols,rows</code> · 패널 숨김: <code>&amp;panel=0</code><br>
+      인덱스 = <code>col + row * cols</code> (cols는 manifest 값)</p>
+  </div>
+</div>
+<script>
+(async () => {
+  const q = new URLSearchParams(location.search);
+  const SHEETS = ['kenney-roguelike-rpg', 'kenney-roguelike-city', 'kenney-roguelike-characters', 'kenney-roguelike-indoors'];
+  const sheet = SHEETS.includes(q.get('sheet')) ? q.get('sheet') : SHEETS[0];
+  const scale = Math.max(1, Math.min(12, Number(q.get('scale')) || 4));
+  if (q.get('panel') === '0') document.body.classList.add('compact'); // scanning mode: canvas only (&panel=0)
+  const PITCH = 17;
+  document.getElementById('sheets').textContent = SHEETS.map((s) => (s === sheet ? `[${s}]` : s)).join(' ');
+  document.getElementById('title').textContent = `tile-index · ${sheet} · x${scale}`;
+
+  const manifest = await (await fetch('/assets/vendor/manifest.json')).json();
+  const entry = manifest[sheet];
+  if (!entry) { document.getElementById('info').textContent = `manifest에 ${sheet} 없음 — npm run assets`; return; }
+  const cols = entry.cols;
+  const rows = entry.rows;
+  let region = { c0: 0, r0: 0, nc: cols, nr: rows };
+  if (q.get('region')) {
+    const [c0, r0, nc, nr] = q.get('region').split(',').map((n) => Number(n));
+    region = { c0: Math.max(0, c0 | 0), r0: Math.max(0, r0 | 0), nc: Math.min(cols - (c0 | 0), nc | 0 || cols), nr: Math.min(rows - (r0 | 0), nr | 0 || rows) };
+  }
+  document.getElementById('info').textContent = `${entry.width}x${entry.height} · ${cols} cols x ${rows} rows = ${cols * rows} cells · region (${region.c0},${region.r0}) ${region.nc}x${region.nr}`;
+
+  const img = new Image();
+  img.src = `/assets/vendor/${sheet}/sheet.png`;
+  await img.decode();
+
+  const canvas = document.getElementById('sheet');
+  const cw = region.nc * PITCH * scale;
+  const ch = region.nr * PITCH * scale;
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  // checker background so transparent pixels are visible
+  for (let y = 0; y < ch; y += 8) for (let x = 0; x < cw; x += 8) { ctx.fillStyle = ((x + y) / 8) % 2 ? '#2a2a3a' : '#20202c'; ctx.fillRect(x, y, 8, 8); }
+  ctx.drawImage(img, region.c0 * PITCH, region.r0 * PITCH, region.nc * PITCH, region.nr * PITCH, 0, 0, cw, ch);
+  // grid + labels
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1;
+  for (let c = 0; c <= region.nc; c++) { ctx.beginPath(); ctx.moveTo(c * PITCH * scale + 0.5, 0); ctx.lineTo(c * PITCH * scale + 0.5, ch); ctx.stroke(); }
+  for (let r = 0; r <= region.nr; r++) { ctx.beginPath(); ctx.moveTo(0, r * PITCH * scale + 0.5); ctx.lineTo(cw, r * PITCH * scale + 0.5); ctx.stroke(); }
+  if (scale >= 3) {
+    ctx.font = `${scale >= 4 ? Math.max(8, scale * 2.2) : 9}px monospace`;
+    ctx.textBaseline = 'top';
+    for (let r = 0; r < region.nr; r++) for (let c = 0; c < region.nc; c++) {
+      const idx = (region.c0 + c) + (region.r0 + r) * cols;
+      const x = c * PITCH * scale + 2;
+      const y = r * PITCH * scale + 1;
+      const label = String(idx);
+      const w = ctx.measureText(label).width + 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(x - 1, y, w, (scale >= 4 ? scale * 2.2 : 9) + 1);
+      ctx.fillStyle = '#ffd166';
+      ctx.fillText(label, x, y);
+    }
+  }
+
+  const preview = document.getElementById('preview');
+  const pctx = preview.getContext('2d');
+  pctx.imageSmoothingEnabled = false;
+  const hover = document.getElementById('hover');
+  const cellAt = (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const c = Math.floor((ev.clientX - rect.left) / (PITCH * scale)) + region.c0;
+    const r = Math.floor((ev.clientY - rect.top) / (PITCH * scale)) + region.r0;
+    if (c < region.c0 || r < region.r0 || c >= region.c0 + region.nc || r >= region.r0 + region.nr) return null;
+    return { c, r, idx: c + r * cols };
+  };
+  const drawPreview = (target, c, r) => {
+    const tctx = target.getContext('2d');
+    tctx.imageSmoothingEnabled = false;
+    tctx.clearRect(0, 0, target.width, target.height);
+    tctx.drawImage(img, c * PITCH, r * PITCH, 16, 16, 0, 0, target.width, target.height);
+  };
+  canvas.addEventListener('mousemove', (ev) => {
+    const cell = cellAt(ev);
+    if (!cell) return;
+    hover.textContent = `(${cell.c},${cell.r}) idx=${cell.idx}`;
+    drawPreview(preview, cell.c, cell.r);
+  });
+
+  const list = document.getElementById('list');
+  const picks = [];
+  canvas.addEventListener('click', async (ev) => {
+    const cell = cellAt(ev);
+    if (!cell) return;
+    const li = document.createElement('li');
+    const small = document.createElement('canvas');
+    small.width = 16; small.height = 16; small.className = 'cell-preview';
+    drawPreview(small, cell.c, cell.r);
+    const name = document.createElement('input');
+    name.placeholder = 'name';
+    const label = document.createElement('code');
+    label.textContent = `${cell.idx} (${cell.c},${cell.r})`;
+    const del = document.createElement('button');
+    del.textContent = 'x';
+    const pick = { idx: cell.idx, name };
+    picks.push(pick);
+    del.onclick = () => { li.remove(); picks.splice(picks.indexOf(pick), 1); };
+    li.append(small, name, label, del);
+    list.append(li);
+    try { await navigator.clipboard.writeText(String(cell.idx)); } catch { /* clipboard may be blocked */ }
+  });
+  document.getElementById('export').onclick = () => {
+    const obj = {};
+    picks.forEach((p, i) => { obj[p.name.value.trim() || `cell_${i}`] = p.idx; });
+    document.getElementById('out').value = JSON.stringify(obj, null, 2);
+  };
+  document.getElementById('clear').onclick = () => { list.innerHTML = ''; picks.length = 0; };
+})();
+</script>
+</body>
+</html>

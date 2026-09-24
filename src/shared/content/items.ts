@@ -17,7 +17,7 @@ export const ITEMS: readonly ItemDef[] = [
 
   { id: 'hat_cap_red', slot: 'hat', name: '빨간 야구 모자', price: 30, color: 0xd62828, shape: 'cap' },
   { id: 'hat_gat', slot: 'hat', name: '갓', price: 40, color: 0x1a1a1a, shape: 'gat' },
-  { id: 'hat_beret', slot: 'hat', name: '베레모', price: 40, color: 0x2b2d42, shape: 'beret' },
+  { id: 'hat_beret', slot: 'hat', name: '베레모', price: 40, color: 0x5a6fa8, shape: 'beret' }, // v0.2 review: lighter navy so it reads against dark hair/backgrounds
   { id: 'hat_crown', slot: 'hat', name: '황금 왕관', price: 60, color: 0xffc300, shape: 'crown' },
 
   { id: 'fur_chair', slot: 'furniture', name: '의자', price: 20, color: 0xb5651d, shape: 'chair', size: { w: 1, h: 1 } },

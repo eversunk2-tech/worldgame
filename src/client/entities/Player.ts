@@ -1,11 +1,14 @@
-// Player: Arcade sprite with 4-way movement, walk anims, melee hitbox, HP/invuln/faint (spec 6.1, 6.5).
+// Player: Arcade sprite with 4-way movement, walk anims, melee hitbox, HP/invuln/faint (spec 5.5, 6.1).
+// v0.2: shadow + name tag + emoji via ActorDecor, footstep SFX on walk frames.
 import Phaser from 'phaser';
-import type { Facing } from '../../shared/types';
+import type { EmoteId, Facing } from '../../shared/types';
 import {
   ATTACK_ACTIVE, ATTACK_BOX, ATTACK_COOLDOWN, ATTACK_REACH, FAINT_TIME, KNOCKBACK, PLAYER_BODY, PLAYER_HP, PLAYER_SPEED,
 } from '../../shared/constants';
 import { damagePlayer } from '../../shared/logic/combat';
 import { animKey } from '../assets/avatarCompositor';
+import { sfx } from '../audio/sfx';
+import { ActorDecor } from './ActorDecor';
 
 const KNOCK_TIME = 0.1;
 
@@ -27,6 +30,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   /** false while a dialog/card/minigame is open. */
   inputEnabled = true;
   texKey: string;
+  readonly decor: ActorDecor;
+  /** Ground kind under the feet, set by the scene each frame (drives the footstep sound). */
+  ground = 'grass';
   onHpChanged: ((hp: number, max: number) => void) | null = null;
   onFaint: (() => void) | null = null;
   onRevive: (() => void) | null = null;
@@ -38,8 +44,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private knockVy = 0;
   private blinkAcc = 0;
   private lunge: Phaser.Tweens.Tween | null = null;
+  private lastWalkFrame = -1;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, texKey: string, facing: Facing) {
+  constructor(scene: Phaser.Scene, x: number, y: number, texKey: string, facing: Facing, name: string) {
     super(scene, x, y, texKey, 1);
     this.texKey = texKey;
     this.facing = facing;
@@ -57,6 +64,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       left: [kb.addKey(K.LEFT), kb.addKey(K.A)],
       right: [kb.addKey(K.RIGHT), kb.addKey(K.D)],
     };
+    this.decor = ActorDecor.attach(scene, this, { name });
     this.playIdle();
   }
 
@@ -65,6 +73,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.texKey = texKey;
     this.setTexture(texKey, 1);
     this.playIdle();
+  }
+
+  setDisplayName(name: string): void {
+    this.decor.setName(name);
+  }
+
+  showEmote(id: EmoteId): void {
+    this.decor.showEmote(id);
   }
 
   /** Stop moving and show idle (used when a modal opens). */
@@ -90,6 +106,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.fainted) {
       this.setVelocity(0, 0);
       this.faintLeft -= dt;
+      this.decor.update();
       if (this.faintLeft <= 0) this.onRevive?.();
       return;
     }
@@ -97,10 +114,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.knockLeft > 0) {
       this.knockLeft -= dt;
       this.setVelocity(this.knockVx, this.knockVy);
+      this.decor.update();
       return;
     }
 
-    if (!this.inputEnabled) { this.halt(); return; }
+    if (!this.inputEnabled) { this.halt(); this.decor.update(); return; }
 
     const down = (ks: Phaser.Input.Keyboard.Key[]) => ks.some((k) => k.isDown);
     const just = (ks: Phaser.Input.Keyboard.Key[]) => ks.some((k) => Phaser.Input.Keyboard.JustDown(k));
@@ -125,10 +143,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.facing = vy < 0 ? 'up' : 'down';
       }
       this.play(animKey(this.texKey, 'walk', this.facing), true);
+      // footsteps: whenever the animation lands on a walk frame (columns 0 / 2)
+      const col = (this.anims.currentFrame?.index ?? 1) - 1; // frame index within the anim (walk1, idle, walk2, idle)
+      if (col !== this.lastWalkFrame) {
+        this.lastWalkFrame = col;
+        if (col === 0 || col === 2) sfx.step(this.ground);
+      }
     } else {
       this.setVelocity(0, 0);
       this.playIdle();
+      this.lastWalkFrame = -1;
     }
+    this.decor.update();
+  }
+
+  /** Call after the depth changed so the decorations follow (scene sets depth = y). */
+  syncDecor(): void {
+    this.decor.update();
   }
 
   private playIdle(): void {
@@ -171,6 +202,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.invulnLeft = r.invulnLeft;
     this.blinkAcc = 0;
     this.onHpChanged?.(this.hp, this.maxHp);
+    sfx.hurt();
     const dx = this.x - fromX;
     const dy = this.y - fromY;
     const len = Math.hypot(dx, dy) || 1;
@@ -204,5 +236,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setVelocity(0, 0);
     this.playIdle();
     this.onHpChanged?.(this.hp, this.maxHp);
+  }
+
+  override destroy(fromScene?: boolean): void {
+    this.decor.destroy();
+    super.destroy(fromScene);
   }
 }

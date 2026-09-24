@@ -8,6 +8,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../../config';
 import { session } from '../../session';
 import { Button } from '../../ui/Button';
 import { Panel } from '../../ui/Panel';
+import { sfx } from '../../audio/sfx';
 import { textStyle, THEME, titleStyle } from '../../ui/theme';
 
 /** kind → scene key. Register new minigame scenes here (and their logic in shared/logic/minigame/registry.ts). */
@@ -83,12 +84,12 @@ export abstract class MinigameBaseScene extends Phaser.Scene {
     this.panel = new Panel(this, (GAME_WIDTH - 820) / 2, (GAME_HEIGHT - 460) / 2, { width: 820, height: 460, title: this.title() });
     const px = this.panel.x;
     const py = this.panel.y;
-    this.progressText = this.add.text(px + 20, py + 16, '', textStyle({ color: THEME.textDim }));
-    this.scoreText = this.add.text(px + 800, py + 16, '', textStyle({ color: THEME.successCss })).setOrigin(1, 0);
-    this.questionText = this.add.text(px + 30, py + 62, '', textStyle({ fontSize: '20px', wordWrap: { width: 760 } }));
-    this.feedbackText = this.add.text(px + 410, py + 420, '', textStyle({ fontSize: '16px', wordWrap: { width: 760 }, align: 'center' })).setOrigin(0.5);
+    this.progressText = this.add.text(px + 20, py + 16, '', textStyle({ size: 'small', color: THEME.textDim }));
+    this.scoreText = this.add.text(px + 800, py + 16, '', textStyle({ size: 'small', color: THEME.successCss })).setOrigin(1, 0);
+    this.questionText = this.add.text(px + 30, py + 60, '', textStyle({ wordWrap: { width: 760 }, lineSpacing: 4 }));
+    this.feedbackText = this.add.text(px + 410, py + 418, '', textStyle({ wordWrap: { width: 760 }, align: 'center' })).setOrigin(0.5);
     this.answerArea = this.add.container(px + 30, py + 140);
-    this.add.text(px + 800, py + 440, this.hintText(), textStyle({ fontSize: '12px', color: THEME.textDim })).setOrigin(1, 1);
+    this.add.text(px + 800, py + 446, this.hintText(), textStyle({ size: 'small', color: THEME.textDim })).setOrigin(1, 1);
     this.input.on('pointerdown', () => this.skipFeedback());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.input.setDefaultCursor('default'));
     this.showQuestion();
@@ -131,6 +132,7 @@ export abstract class MinigameBaseScene extends Phaser.Scene {
     if (!item) return;
     this.answering = true;
     const fb = this.logic.answer(this.state, choice);
+    if (fb.correct) sfx.correct(); else sfx.wrong();
     this.showAnswerFeedback(choice, fb.correct, item);
     this.scoreText.setText(`정답 ${this.logic.result(this.state).correct}`);
     this.feedbackText.setText(`${fb.correct ? '정답!' : '아쉬워요'} ${fb.explanation}`).setColor(fb.correct ? THEME.successCss : THEME.dangerCss);
@@ -164,10 +166,10 @@ export abstract class MinigameBaseScene extends Phaser.Scene {
     const h = 200;
     const px = (GAME_WIDTH - w) / 2;
     const py = (GAME_HEIGHT - h) / 2;
-    const panel = new Panel(this, px, py, { width: w, height: h, border: result.success ? THEME.success : THEME.danger });
+    const panel = new Panel(this, px, py, { width: w, height: h, tint: result.success ? 0xc8f5cf : 0xffc4c4 });
     panel.setDepth(10);
     const headline = this.add.text(w / 2, 40, result.success ? `${result.correct} / ${result.total} 정답 · 성공!` : `${result.correct} / ${result.total} · 아쉬워요`, titleStyle({ color: result.success ? THEME.successCss : THEME.dangerCss })).setOrigin(0.5);
-    const sub = this.add.text(w / 2, 90, result.success ? '미션 완료! 보상을 받았어요.' : `${this.spec.passCount}개 이상 맞히면 성공이에요. 표지판을 읽고 다시 도전해 봐요.`, textStyle({ color: THEME.textDim, align: 'center', wordWrap: { width: w - 40 } })).setOrigin(0.5);
+    const sub = this.add.text(w / 2, 90, result.success ? '미션 완료! 보상을 받았어요.' : `${this.spec.passCount}개 이상 맞히면 성공이에요. 표지판을 읽고 다시 도전해 봐요.`, textStyle({ size: 'small', color: THEME.textDim, align: 'center', wordWrap: { width: w - 40 } })).setOrigin(0.5);
     const btn = new Button(this, w / 2 - 70, h - 60, '확인 (Enter)', { width: 140, height: 40, onClick: () => this.emitDone(result) });
     panel.add([headline, sub, btn]);
     this.resultPanel = panel;

@@ -30,8 +30,8 @@ export class OxScene extends MinigameBaseScene {
   }
 
   protected buildAnswers(_item: QuizItem): void {
-    this.oBtn = new Button(this, 60, 20, 'O', { width: 280, height: 200, fontSize: 96, fill: 0x2e6b46, hover: 0x3a8a58, border: THEME.success, onClick: () => this.choose(true) });
-    this.xBtn = new Button(this, 420, 20, 'X', { width: 280, height: 200, fontSize: 96, fill: 0x7a2f3a, hover: 0x9a3d4a, border: THEME.danger, onClick: () => this.choose(false) });
+    this.oBtn = new Button(this, 60, 20, 'O', { width: 280, height: 200, size: 'big', textColor: THEME.successCss, onClick: () => this.choose(true) });
+    this.xBtn = new Button(this, 420, 20, 'X', { width: 280, height: 200, size: 'big', textColor: THEME.dangerCss, onClick: () => this.choose(false) });
     this.answerArea.add([this.oBtn, this.xBtn]);
   }
 

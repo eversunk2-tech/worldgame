@@ -81,6 +81,15 @@ class Session {
   get lastCity(): CityId | null {
     return this.progress.lastCity;
   }
+
+  /** Persisted mute flag (spec 9). */
+  get muted(): boolean {
+    return this.progress.settings.muted;
+  }
+
+  setMuted(muted: boolean): void {
+    this.dispatch({ type: 'settings.setMuted', muted });
+  }
 }
 
 export const session = new Session();

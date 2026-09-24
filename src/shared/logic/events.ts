@@ -12,7 +12,8 @@ export type Action =
   | { type: 'shop.buy'; itemId: string }
   | { type: 'avatar.equip'; slot: Exclude<ItemSlot, 'furniture'>; itemId: string | null }
   | { type: 'room.place'; itemId: string; gx: number; gy: number }
-  | { type: 'room.remove'; itemId: string };
+  | { type: 'room.remove'; itemId: string }
+  | { type: 'settings.setMuted'; muted: boolean };
 
 export type ProgressEvent =
   | { type: 'points.changed'; delta: number; points: number; reason: string }
@@ -25,4 +26,5 @@ export type ProgressEvent =
   | { type: 'room.changed' }
   | { type: 'rank.changed'; rank: string }
   | { type: 'profile.changed'; name: string }
+  | { type: 'settings.changed'; muted: boolean }
   | { type: 'rejected'; action: Action['type']; reason: string };

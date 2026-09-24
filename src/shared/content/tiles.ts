@@ -1,4 +1,5 @@
-// Tile legend: ASCII char → tile id, name, collision flag (spec 6.1).
+// Tile legend: ASCII char → tile id, name, collision flag (spec 5.3, v0.2: 27 kinds; ids 0-15 unchanged from v0.1).
+// Rendering (ground / decoration / object frames) is decided by the client from the theme; collision is `solid` only.
 
 export interface TileInfo { id: number; char: string; name: string; solid: boolean }
 
@@ -19,6 +20,17 @@ export const TILES: readonly TileInfo[] = [
   { id: 13, char: 'W', name: 'wall', solid: true },
   { id: 14, char: 'E', name: 'entrance', solid: false },
   { id: 15, char: '*', name: 'flower', solid: false },
+  { id: 16, char: '-', name: 'sidewalk', solid: false },
+  { id: 17, char: 'x', name: 'crosswalk', solid: false },
+  { id: 18, char: 'p', name: 'palm', solid: true },
+  { id: 19, char: 'd', name: 'dirt', solid: false },
+  { id: 20, char: 'f', name: 'fence', solid: true },
+  { id: 21, char: 'b', name: 'bench', solid: true },
+  { id: 22, char: 'l', name: 'lamp', solid: true },
+  { id: 23, char: 't', name: 'cafeTable', solid: true },
+  { id: 24, char: 'm', name: 'stall', solid: true },
+  { id: 25, char: 'v', name: 'car', solid: true },
+  { id: 26, char: 'Q', name: 'plaza', solid: false },
 ];
 
 export const TILE_COUNT = TILES.length;

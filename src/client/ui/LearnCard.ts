@@ -1,12 +1,14 @@
-// Learn card overlay: 640×360 panel with 지형/기후/문화 tabs (spec 6.9).
+// Learn card overlay: 640×360 panel with 지형/기후/문화 tabs (spec 5.9). Tabs: click or keys 1/2/3 while open
+// (v0.1 review low #10: no more shared LEFT/RIGHT keys with the player).
 import Phaser from 'phaser';
 import type { LearnCard as LearnCardData } from '../../shared/types';
+import { sfx } from '../audio/sfx';
 import { Panel } from './Panel';
 import { Button } from './Button';
 import { THEME, textStyle } from './theme';
 
 const TOPICS = ['geo', 'climate', 'culture'] as const;
-const TOPIC_NAMES: Record<(typeof TOPICS)[number], string> = { geo: '지형', climate: '기후', culture: '문화' };
+const TOPIC_NAMES: Record<(typeof TOPICS)[number], string> = { geo: '1 지형', climate: '2 기후', culture: '3 문화' };
 const W = 640;
 const H = 360;
 
@@ -27,14 +29,15 @@ export class LearnCard extends Phaser.GameObjects.Container {
     this.panel = new Panel(scene, 0, 0, { width: W, height: H });
     this.add(this.panel);
     TOPICS.forEach((topic, i) => {
-      const b = new Button(scene, 16 + i * 130, 12, TOPIC_NAMES[topic], { width: 120, height: 32, onClick: () => this.select(i) });
+      const b = new Button(scene, 16 + i * 130, 12, TOPIC_NAMES[topic], { width: 120, height: 32, size: 'small', onClick: () => this.select(i) });
       this.tabs.push(b);
       this.add(b);
     });
-    this.titleText = scene.add.text(W / 2, 60, '', textStyle({ fontSize: '22px', color: THEME.accentCss, fontStyle: 'bold' })).setOrigin(0.5, 0);
-    this.bodyText = scene.add.text(32, 100, '', textStyle({ fontSize: '17px', wordWrap: { width: W - 64 }, lineSpacing: 10 }));
-    this.closeBtn = new Button(scene, W / 2 - 60, H - 48, '닫기 (Esc)', { width: 120, height: 34, onClick: () => this.close() });
+    this.titleText = scene.add.text(W / 2, 58, '', textStyle({ size: 'title', color: THEME.accentCss })).setOrigin(0.5, 0);
+    this.bodyText = scene.add.text(32, 100, '', textStyle({ wordWrap: { width: W - 64 }, lineSpacing: 8 }));
+    this.closeBtn = new Button(scene, W / 2 - 60, H - 48, '닫기 (Esc)', { width: 120, height: 34, size: 'small', onClick: () => this.close() });
     this.add([this.titleText, this.bodyText, this.closeBtn]);
+    this.add(scene.add.text(W - 16, H - 14, '1·2·3 키로 탭 전환', textStyle({ size: 'small', color: THEME.textDim })).setOrigin(1, 1));
     this.setVisible(false);
     scene.add.existing(this);
   }
@@ -43,6 +46,7 @@ export class LearnCard extends Phaser.GameObjects.Container {
   show(cards: LearnCardData[], topic: string, onClose?: () => void): void {
     this.cards = cards;
     this.onClose = onClose ?? null;
+    if (!this.visible) sfx.open();
     this.setVisible(true);
     const idx = Math.max(0, TOPICS.findIndex((t) => t === topic));
     this.select(idx);

@@ -1,0 +1,58 @@
+{
+  "kenney-roguelike-rpg": {
+    "source": "https://kenney.nl/media/pages/assets/roguelike-rpg-pack/12c03cd78b-1677697420/kenney_roguelike-rpg-pack.zip",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "zipBytes": 715373,
+    "zipSha256": "8e7d2378f8f794245645f6d7dc7aeeb246791410a7e512293c594b46a5a9524b",
+    "file": "Spritesheet/roguelikeSheet_transparent.png",
+    "sheetBytes": 94579,
+    "sheetSha256": "808c8d734480bc949b284f3bcc252e87e1ee53b24178791a6838cce6a319c439",
+    "width": 968,
+    "height": 526,
+    "cols": 57,
+    "rows": 31,
+    "fetchedAt": "2026-09-24T01:12:22.491Z"
+  },
+  "kenney-roguelike-city": {
+    "source": "https://kenney.nl/media/pages/assets/roguelike-modern-city/0ff3dfff2b-1677694743/kenney_roguelike-modern-city.zip",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "zipBytes": 519937,
+    "zipSha256": "2a3f36b1bc3a3d1cb4b9da051c493d163c493fe54adc66e78e76b3fb4abcfc56",
+    "file": "Tilemap/tilemap.png",
+    "sheetBytes": 25426,
+    "sheetSha256": "e7791156bfe5fd238a698e900ca5c749dec49c8f58b0c570af2f288ced34500c",
+    "width": 628,
+    "height": 475,
+    "cols": 37,
+    "rows": 28,
+    "fetchedAt": "2026-09-24T01:12:22.493Z"
+  },
+  "kenney-roguelike-characters": {
+    "source": "https://kenney.nl/media/pages/assets/roguelike-characters/53ffff4133-1729196490/kenney_roguelike-characters.zip",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "zipBytes": 63243,
+    "zipSha256": "05c4c0af7326584cfffbbb196571eb9e102981d2033e90e225c5ba8da8771284",
+    "file": "Spritesheet/roguelikeChar_transparent.png",
+    "sheetBytes": 11137,
+    "sheetSha256": "771d51ca84b2c5b412027ba80c6a6b8a98bb5a983b2c58ac4f0ccf08ae4d10f2",
+    "width": 918,
+    "height": 203,
+    "cols": 54,
+    "rows": 12,
+    "fetchedAt": "2026-09-24T01:12:22.494Z"
+  },
+  "kenney-roguelike-indoors": {
+    "source": "https://kenney.nl/media/pages/assets/roguelike-indoors/4d5b520b03-1702169567/kenney_roguelike-indoors.zip",
+    "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "zipBytes": 112227,
+    "zipSha256": "578cfdb066c4a9de78a52535adaf953728889b2cf268441bd4d338844f7aa586",
+    "file": "Tilesheets/roguelikeIndoor_transparent.png",
+    "sheetBytes": 22169,
+    "sheetSha256": "ade984d5cbe3f16d9e23e6dc516246649de1a7eec2540cf31d53852b690c446f",
+    "width": 458,
+    "height": 305,
+    "cols": 27,
+    "rows": 18,
+    "fetchedAt": "2026-09-24T01:12:22.494Z"
+  }
+}

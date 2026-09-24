@@ -76,7 +76,7 @@ describe('decideNpcInteraction', () => {
     expect(applyMinigameResult(p, 'm_seoul_ox', { kind: 'ox', success: false, correct: 3, total: 5, answeredIds: [] }, ev)).toBe(true);
     expect(p.missions.m_seoul_ox!).toMatchObject({ status: 'active', attempts: 1 });
     expect(p.points).toBe(0);
-    expect(p.stats).toEqual({ defeated: 0, quizAnswered: 5, quizCorrect: 3 });
+    expect(p.stats).toEqual({ defeated: 0, quizAnswered: 5, quizCorrect: 3, minigames: 0 });
     expect(applyMinigameResult(p, 'm_seoul_ox', { kind: 'ox', success: true, correct: 4, total: 5, answeredIds: [] }, ev)).toBe(true);
     expect(p.missions.m_seoul_ox!).toMatchObject({ status: 'turnedIn', attempts: 2 });
     expect(p.points).toBe(30);

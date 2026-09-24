@@ -9,6 +9,7 @@ import { CITY_MARKERS } from './continents';
 import { MONSTERS, getMonsterDef } from './monsters';
 import { ITEMS, getItem } from './items';
 import { isWalkable, tileForChar } from './tiles';
+import { findBuildings, rectFilledWith } from '../map/buildings';
 
 export { getItem, ITEMS } from './items';
 export { getMonsterDef, MONSTERS } from './monsters';
@@ -87,6 +88,33 @@ export function validateContent(): string[] {
     walk('entrance', city.entrance);
     walk('spawn', city.spawn);
     if (city.rows[city.entrance.ty]?.[city.entrance.tx] !== 'E') errors.push(`${tag}: entrance tile is not 'E'`);
+    // v0.2: buildings must be filled rectangles ≥ 2x2, landmarks must sit on 'P' cells, theme must be well-formed
+    for (const err of findBuildings(city.rows).errors) errors.push(`${tag}: ${err}`);
+    const coveredP = new Set<string>();
+    const lmIds = new Set<string>();
+    for (const lm of city.landmarks) {
+      if (lmIds.has(lm.id)) errors.push(`${tag}: duplicate landmark id ${lm.id}`);
+      lmIds.add(lm.id);
+      if (lm.w < 1 || lm.h < 1) errors.push(`${tag}: landmark ${lm.id} has empty size`);
+      if (lm.at.tx < 0 || lm.at.ty < 0 || lm.at.tx + lm.w > MAP_COLS || lm.at.ty + lm.h > MAP_ROWS) errors.push(`${tag}: landmark ${lm.id} out of map`);
+      if (lm.solid !== false) {
+        if (!rectFilledWith(city.rows, lm.at.tx, lm.at.ty, lm.w, lm.h, 'P')) errors.push(`${tag}: landmark ${lm.id} footprint is not all 'P'`);
+        for (let y = lm.at.ty; y < lm.at.ty + lm.h; y++) for (let x = lm.at.tx; x < lm.at.tx + lm.w; x++) coveredP.add(`${x},${y}`);
+      }
+    }
+    city.rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) if (row[x] === 'P' && !coveredP.has(`${x},${y}`)) errors.push(`${tag}: 'P' at (${x},${y}) belongs to no landmark`);
+    });
+    const th = city.theme;
+    if (!th) errors.push(`${tag}: theme missing`);
+    else {
+      if (!['grass', 'sand'].includes(th.ground)) errors.push(`${tag}: theme.ground ${th.ground}`);
+      if (!['dirt', 'cobble', 'asphalt'].includes(th.road)) errors.push(`${tag}: theme.road ${th.road}`);
+      if (!['village', 'hanok', 'parisian', 'sandstone', 'skyscraper', 'colorful', 'modern'].includes(th.building)) errors.push(`${tag}: theme.building ${th.building}`);
+      for (const t of [th.tree, th.streetTree]) if (!['round', 'pine', 'palm', 'tropical', 'plane', 'gum'].includes(t)) errors.push(`${tag}: theme tree ${t}`);
+      if (!['river', 'sea'].includes(th.water)) errors.push(`${tag}: theme.water ${th.water}`);
+      if (!['stone', 'hedge'].includes(th.wall)) errors.push(`${tag}: theme.wall ${th.wall}`);
+    }
     for (const npc of city.npcs) {
       walk(`npc ${npc.id}`, npc.at);
       for (const mid of npc.missionIds) {
@@ -95,6 +123,7 @@ export function validateContent(): string[] {
         else if (m.giverNpcId !== npc.id) errors.push(`${tag}: mission ${mid} giver mismatch (${m.giverNpcId} vs ${npc.id})`);
       }
       if (npc.cardId && !city.cards.some((c) => c.id === npc.cardId)) errors.push(`${tag}: npc ${npc.id} cardId unknown`);
+      if (typeof npc.bubble !== 'string' || npc.bubble.length === 0 || npc.bubble.length > 12) errors.push(`${tag}: npc ${npc.id} bubble must be 1-12 chars`);
     }
     for (const sign of city.signs) {
       walk(`sign ${sign.id}`, sign.at);

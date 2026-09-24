@@ -8,6 +8,7 @@ import { HudScene } from './scenes/HudScene';
 import { QuizScene } from './scenes/minigames/QuizScene';
 import { OxScene } from './scenes/minigames/OxScene';
 import { AvatarRoomScene } from './scenes/AvatarRoomScene';
+import { DebugAtlasScene } from './scenes/DebugAtlasScene';
 
 export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 540;
@@ -22,5 +23,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { debug: false } },
-  scene: [BootScene, TitleScene, WorldMapScene, CityScene, HudScene, QuizScene, OxScene, AvatarRoomScene],
+  scene: [BootScene, TitleScene, WorldMapScene, CityScene, HudScene, QuizScene, OxScene, AvatarRoomScene, DebugAtlasScene],
 };

@@ -1,12 +1,16 @@
-// City exploration: tilemap, player, NPCs, signs, monsters, entrance (spec 5, 6.1, 6.3, 6.5).
+// City exploration: tilemap layers, player, NPCs, signs, monsters, landmarks, entrance (spec 5.3, 6). v0.2 adds
+// speech bubbles by distance, emoji keys 1–6, Tab minimap, N mute, BGM per city, footstep ground detection.
 import Phaser from 'phaser';
-import type { CityDef, CityId, LearnCard as LearnCardData, MinigameResult, MinigameSpec, SignDef } from '../../shared/types';
-import { ENTRANCE_GRACE, INTERACT_RANGE, MAP_HEIGHT, MAP_WIDTH, PLAYER_ATK } from '../../shared/constants';
+import type { CityDef, CityId, EmoteId, LearnCard as LearnCardData, MinigameResult, MinigameSpec, SignDef } from '../../shared/types';
+import { BUBBLE_RANGE, ENTRANCE_GRACE, INTERACT_RANGE, MAP_HEIGHT, MAP_WIDTH, PLAYER_ATK, TILE_SIZE } from '../../shared/constants';
 import { getCard, getCity, getMission, getMonster } from '../../shared/content';
 import { decideNpcInteraction } from '../../shared/logic/missions';
 import type { ProgressEvent } from '../../shared/logic/reducer';
 import { textureKeyFor } from '../assets/avatarCompositor';
+import { EMOTE_IDS } from '../assets/emotes';
 import { TEX } from '../assets/manifest';
+import { bgm } from '../audio/bgm';
+import { sfx } from '../audio/sfx';
 import { Monster } from '../entities/Monster';
 import { Npc, type NpcMarker } from '../entities/Npc';
 import { Player } from '../entities/Player';
@@ -19,6 +23,18 @@ import { launchMinigame } from './minigames/MinigameHost';
 
 interface Sign { def: SignDef; sprite: Phaser.GameObjects.Image }
 
+/** Ground kind under a tile char for the footstep sound (spec 6.5). */
+function groundKind(ch: string | undefined): string {
+  switch (ch) {
+    case '=': case 'E': case 'x': return 'road';
+    case '-': return 'sidewalk';
+    case 'Q': return 'plaza';
+    case 'B': return 'bridge';
+    case 'S': case 's': case 'd': return 'sand';
+    default: return 'grass';
+  }
+}
+
 export class CityScene extends Phaser.Scene {
   private cityId!: CityId;
   private city!: CityDef;
@@ -27,7 +43,10 @@ export class CityScene extends Phaser.Scene {
   private signs: Sign[] = [];
   private monsters: Monster[] = [];
   private hud!: HudScene;
-  private keys!: { e: Phaser.Input.Keyboard.Key; space: Phaser.Input.Keyboard.Key; f: Phaser.Input.Keyboard.Key; m: Phaser.Input.Keyboard.Key; esc: Phaser.Input.Keyboard.Key; left: Phaser.Input.Keyboard.Key; right: Phaser.Input.Keyboard.Key };
+  private keys!: {
+    e: Phaser.Input.Keyboard.Key; space: Phaser.Input.Keyboard.Key; f: Phaser.Input.Keyboard.Key; m: Phaser.Input.Keyboard.Key;
+    esc: Phaser.Input.Keyboard.Key; tab: Phaser.Input.Keyboard.Key; n: Phaser.Input.Keyboard.Key; nums: Phaser.Input.Keyboard.Key[];
+  };
   private enteredAt = 0;
   private leaving = false;
   private inMinigame = false;
@@ -36,6 +55,7 @@ export class CityScene extends Phaser.Scene {
   private cleanupMinigame: (() => void) | null = null;
   private readonly onProgress = (e: ProgressEvent) => {
     if (e.type === 'avatar.changed') this.player.setAvatarTexture(textureKeyFor(this, session.progress.avatar));
+    if (e.type === 'profile.changed') this.player.setDisplayName(e.name);
     if (e.type === 'mission.changed' || e.type === 'card.read') this.refreshMarkers();
   };
 
@@ -55,12 +75,11 @@ export class CityScene extends Phaser.Scene {
 
   create(): void {
     this.city = getCity(this.cityId);
-    const { entrance } = buildCityMap(this, this.city);
-    const layer = this.children.getAll().find((c) => c instanceof Phaser.Tilemaps.TilemapLayer) as Phaser.Tilemaps.TilemapLayer;
+    const { entrance, layer } = buildCityMap(this, this.city);
 
     // player
     const sp = tileCenter(this.city.spawn);
-    this.player = new Player(this, sp.x, sp.y, textureKeyFor(this, session.progress.avatar), this.city.spawnFacing);
+    this.player = new Player(this, sp.x, sp.y, textureKeyFor(this, session.progress.avatar), this.city.spawnFacing, session.progress.profile.name);
     this.physics.add.collider(this.player, layer);
     this.player.onHpChanged = (hp, max) => this.hud.setHp(hp, max);
     this.player.onFaint = () => { this.monsters.forEach((m) => m.forceReturn()); this.hud.closeModals(); };
@@ -106,18 +125,28 @@ export class CityScene extends Phaser.Scene {
 
     this.slash = this.add.graphics().setDepth(5000);
 
-    // keys
+    // keys (Tab is captured so the browser does not move focus)
     const K = Phaser.Input.Keyboard.KeyCodes;
     const kb = this.input.keyboard!;
-    this.keys = { e: kb.addKey(K.E), space: kb.addKey(K.SPACE), f: kb.addKey(K.F), m: kb.addKey(K.M), esc: kb.addKey(K.ESC), left: kb.addKey(K.LEFT), right: kb.addKey(K.RIGHT) };
+    kb.addCapture(K.TAB);
+    this.keys = {
+      e: kb.addKey(K.E), space: kb.addKey(K.SPACE), f: kb.addKey(K.F), m: kb.addKey(K.M), esc: kb.addKey(K.ESC),
+      tab: kb.addKey(K.TAB), n: kb.addKey(K.N),
+      nums: [K.ONE, K.TWO, K.THREE, K.FOUR, K.FIVE, K.SIX].map((c) => kb.addKey(c)),
+    };
 
     // hud
     this.scene.launch('Hud', { cityId: this.cityId });
     this.hud = this.scene.get('Hud') as HudScene;
+    // HudScene.init() (next frame) keeps this field, so assigning now is safe; re-assign after create() as well
+    // in case the HUD instance is ever rebuilt (review Stage A #1).
+    this.hud.onEmote = (id) => this.emote(id);
+    this.hud.events.once(Phaser.Scenes.Events.CREATE, () => { this.hud.onEmote = (id) => this.emote(id); });
+
+    bgm.play(this.city.theme.bgm);
 
     session.events.on('any', this.onProgress);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.onShutdown());
-    // markers need the HUD/session state; NPC markers are pure so set them now
     this.refreshMarkers();
   }
 
@@ -137,10 +166,18 @@ export class CityScene extends Phaser.Scene {
     const modal = hudReady && this.hud.isModalOpen();
     this.player.inputEnabled = !modal && !this.inMinigame;
 
+    // ground kind under the feet (for footsteps)
+    const ftx = Math.floor(this.player.x / TILE_SIZE);
+    const fty = Math.floor((this.player.y + 12) / TILE_SIZE);
+    this.player.ground = groundKind(this.city.rows[fty]?.[ftx]);
+
     this.player.update(dt);
     this.player.setDepth(this.player.y);
+    this.player.syncDecor();
     // While a dialog / card is open the player cannot act, so monsters hold still too (no chasing or attacking).
     for (const m of this.monsters) { if (modal) m.freeze(); else m.update(dt, this.player); }
+    this.updateBubbles(modal);
+    if (hudReady) this.hud.minimap.update(this.player.x, this.player.y, this.cameras.main);
 
     if (this.player.fainted) {
       if (hudReady) this.hud.showFaint(this.player.faintLeft);
@@ -152,21 +189,31 @@ export class CityScene extends Phaser.Scene {
     // Consume every key edge each frame (single owner of keyboard edges while in the city).
     const J = Phaser.Input.Keyboard.JustDown;
     const fJust = J(this.keys.f);
-    const eDown = J(this.keys.e);
-    const spaceDown = J(this.keys.space);
-    const eJust = eDown || spaceDown;
+    const eJust = J(this.keys.e) || J(this.keys.space);
     const mJust = J(this.keys.m);
     const escJust = J(this.keys.esc);
-    const leftJust = J(this.keys.left);
-    const rightJust = J(this.keys.right);
+    const tabJust = J(this.keys.tab);
+    const nJust = J(this.keys.n);
+    const numJust = this.keys.nums.map((k) => J(k));
 
-    // modal (dialog / learn card) input
+    if (tabJust && hudReady) this.hud.toggleMinimap();
+    if (nJust) session.setMuted(!session.muted);
+
+    // modal (dialog / learn card) input: E/Space/Esc close, 1/2/3 pick a card tab
     if (modal) {
       if (eJust || escJust) this.hud.closeTopModal();
-      else if (this.hud.isCardOpen() && leftJust) this.hud.cardTab(-1);
-      else if (this.hud.isCardOpen() && rightJust) this.hud.cardTab(1);
+      else if (this.hud.isCardOpen()) {
+        const tab = numJust.slice(0, 3).findIndex((v) => v);
+        if (tab >= 0) this.hud.selectCardTab(tab);
+      }
       this.hud.setHint('');
       return;
+    }
+
+    // emoji 1–6 (only when no modal / minigame)
+    if (!this.inMinigame) {
+      const idx = numJust.findIndex((v) => v);
+      if (idx >= 0) this.emote(EMOTE_IDS[idx]!);
     }
 
     // attack
@@ -186,6 +233,22 @@ export class CityScene extends Phaser.Scene {
     if (eJust && target) this.onInteract(target);
     if (mJust) this.leave();
     void time;
+  }
+
+  // ------------------------------------------------------------ presence
+
+  private emote(id: EmoteId): void {
+    if (this.inMinigame || this.player.fainted) return;
+    this.player.showEmote(id);
+    sfx.emote();
+    session.events.emit('presence.emote', { id });
+  }
+
+  private updateBubbles(modal: boolean): void {
+    for (const npc of this.npcs) {
+      const near = !modal && Phaser.Math.Distance.Between(this.player.x, this.player.y, npc.x, npc.y) <= BUBBLE_RANGE;
+      npc.setBubbleVisible(near);
+    }
   }
 
   // ------------------------------------------------------------ combat
@@ -279,9 +342,12 @@ export class CityScene extends Phaser.Scene {
     this.inMinigame = true;
     this.hud.closeModals();
     this.hud.setHint('');
+    for (const npc of this.npcs) npc.setBubbleVisible(false);
+    bgm.duck(0.4);
     this.cleanupMinigame = launchMinigame(this, spec, missionId, (result: MinigameResult) => {
       this.cleanupMinigame = null;
       this.inMinigame = false;
+      bgm.duck(1);
       const m = getMission(missionId);
       session.dispatch({ type: 'mission.minigameResult', missionId, result });
       const text = result.success ? (m?.completeText ?? '성공!') : (m?.failText ?? '아깝다! 다시 도전해 봐.');
@@ -314,5 +380,4 @@ export class CityScene extends Phaser.Scene {
     this.player.halt();
     this.scene.start('WorldMap');
   }
-
 }

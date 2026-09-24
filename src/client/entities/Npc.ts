@@ -1,11 +1,12 @@
-// NPC: static composite sprite + ! / ? marker (spec 6.3).
+// NPC: static composite sprite + name tag (role colour) + speech bubble + ! / ? marker (spec 6.1, 6.2).
 import Phaser from 'phaser';
 import type { AvatarEquip, NpcDef } from '../../shared/types';
 import { TILE_SIZE } from '../../shared/constants';
 import { idleFrame, textureKeyFor } from '../assets/avatarCompositor';
-import { textStyle, THEME } from '../ui/theme';
+import { outlined, THEME } from '../ui/theme';
+import { ActorDecor } from './ActorDecor';
 
-/** Looks per NPC id, with a role fallback. All built from the shared layer sheets. */
+/** Looks per NPC id, with a role fallback. All built from the shared part sheet (spec 5.6). */
 const NPC_LOOKS: Record<string, AvatarEquip> = {
   npc_hanbyeol: { body: 'body_light', top: 'top_hoodie_green', hair: 'hair_long_brown', hat: null },
   npc_onyu: { body: 'body_tan', top: 'top_tshirt_blue', hair: 'hair_short_black', hat: 'hat_cap_red' },
@@ -19,11 +20,15 @@ const ROLE_LOOKS: Record<NpcDef['role'], AvatarEquip> = {
   teacher: { body: 'body_tan', top: 'top_tshirt_blue', hair: 'hair_short_black', hat: 'hat_beret' },
   guard: { body: 'body_tan', top: 'top_hanbok', hair: 'hair_short_black', hat: 'hat_gat' },
 };
+export const ROLE_COLORS: Record<NpcDef['role'], string> = { guide: '#ffd166', teacher: '#8ecbff', guard: '#a5ff9b' };
 
 export type NpcMarker = '!' | '?' | null;
 
+const MARKER_Y = -62; // above the name tag (-26) and the speech bubble (-38, spec 6.1: 이름표 위)
+
 export class Npc extends Phaser.Physics.Arcade.Sprite {
   readonly def: NpcDef;
+  readonly decor: ActorDecor;
   private readonly marker: Phaser.GameObjects.Text;
   private markerKind: NpcMarker = null;
   private bob: Phaser.Tweens.Tween | null = null;
@@ -41,7 +46,8 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     body.setSize(20, 16);
     body.setOffset(6, 14);
     this.setDepth(y);
-    this.marker = scene.add.text(x, y - 26, '', textStyle({ fontSize: '18px', fontStyle: 'bold', color: THEME.accentCss, stroke: '#000000', strokeThickness: 3 })).setOrigin(0.5, 1).setDepth(y + 1000);
+    this.decor = ActorDecor.attach(scene, this, { name: def.name, nameColor: ROLE_COLORS[def.role], bubble: def.bubble });
+    this.marker = scene.add.text(x, y + MARKER_Y, '', outlined({ size: 'title', color: THEME.accentCss })).setOrigin(0.5, 1).setDepth(y + 1003);
     this.marker.setVisible(false);
   }
 
@@ -51,14 +57,20 @@ export class Npc extends Phaser.Physics.Arcade.Sprite {
     this.bob?.stop();
     this.bob = null;
     if (!kind) { this.marker.setVisible(false); return; }
-    this.marker.setText(kind).setVisible(true).setY(this.y - 26);
-    this.marker.setColor(kind === '!' ? THEME.accentCss : '#8ecbff');
-    this.bob = this.scene.tweens.add({ targets: this.marker, y: this.y - 30, duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.marker.setText(kind).setVisible(true).setY(this.y + MARKER_Y);
+    this.marker.setColor(kind === '!' ? THEME.accentCss : THEME.info);
+    this.bob = this.scene.tweens.add({ targets: this.marker, y: this.y + MARKER_Y - 4, duration: 400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+  }
+
+  /** Speech bubble on/off (CityScene decides by distance and modal state). */
+  setBubbleVisible(v: boolean): void {
+    this.decor.setBubbleVisible(v);
   }
 
   override destroy(fromScene?: boolean): void {
     this.bob?.stop();
     this.marker.destroy();
+    this.decor.destroy();
     super.destroy(fromScene);
   }
 }

@@ -38,3 +38,8 @@ export const ROOM_ROWS = 6;
 // Minigame defaults
 export const QUIZ_COUNT = 5;
 export const QUIZ_PASS = 4;
+
+// ZEP-style presence (spec 6)
+export const EMOTE_SHOW_MS = 2000;   // emoji bubble lifetime
+export const BUBBLE_RANGE = 96;      // px: NPC speech bubble shows within this distance
+export const MINIMAP_SCALE = 4;      // px per tile on the minimap (40×30 → 160×120)
