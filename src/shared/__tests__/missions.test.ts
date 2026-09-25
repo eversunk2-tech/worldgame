@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getCity, getNpc } from '../content';
+import type { CityId, MinigameResult } from '../types';
+import { getCity, getMission, getNpc } from '../content';
 import type { ProgressEvent } from '../logic/events';
 import { acceptMission, applyMinigameResult, countDefeat, decideNpcInteraction, resultStars, starBonus, turnInMission, unlockDependents, unlockSatisfied } from '../logic/missions';
 import { createProgress } from '../logic/progress';
@@ -131,6 +132,55 @@ describe('decideNpcInteraction', () => {
     // 마리 (Paris guide) only offers the blank mission after her quiz
     p.readCards.push('card_paris_geo');
     expect(decideNpcInteraction(p, marie, 'paris')).toEqual({ kind: 'accept', missionId: 'm_paris_quiz' });
+  });
+
+  it('new cities (spec 7.5, A.3–A.6): each NPC offers its first mission, then the follow-up after the turn-in', () => {
+    // [npc, city, first mission, first kind, follow-up, follow-up kind]
+    const chains: [string, CityId, string, string, string, string][] = [
+      ['npc_amir', 'cairo', 'm_cairo_quiz', 'quiz', 'm_cairo_map', 'mapfind'],
+      ['npc_nadia', 'cairo', 'm_cairo_match', 'match', 'm_cairo_ox', 'ox'],
+      ['npc_emily', 'newyork', 'm_newyork_quiz', 'quiz', 'm_newyork_blank', 'blank'],
+      ['npc_noah', 'newyork', 'm_newyork_order', 'order', 'm_newyork_ox', 'ox'],
+      ['npc_olivia', 'sydney', 'm_sydney_quiz', 'quiz', 'm_sydney_match', 'match'],
+      ['npc_jack', 'sydney', 'm_sydney_map', 'mapfind', 'm_sydney_blank', 'blank'],
+      ['npc_lucas', 'rio', 'm_rio_quiz', 'quiz', 'm_rio_order', 'order'],
+      ['npc_isabela', 'rio', 'm_rio_blank', 'blank', 'm_rio_ox', 'ox'],
+    ];
+    for (const [npcId, cityId, first, firstKind, next, nextKind] of chains) {
+      const npc = getNpc(cityId, npcId)!;
+      expect(npc.missionIds).toEqual([first, next]);
+      expect(getMission(next)!.prerequisiteMissionId).toBe(first);
+      expect(getMission(first)!.prerequisiteMissionId).toBeUndefined();
+      const p = createProgress();
+      if (npc.cardId) {
+        expect(decideNpcInteraction(p, npc, cityId)).toEqual({ kind: 'showCard', cardId: npc.cardId });
+        p.readCards.push(npc.cardId);
+      }
+      expect(p.missions[next]!.status).toBe('locked');
+      expect(decideNpcInteraction(p, npc, cityId)).toEqual({ kind: 'accept', missionId: first });
+      const ev: ProgressEvent[] = [];
+      acceptMission(p, first, ev);
+      const a = decideNpcInteraction(p, npc, cityId);
+      expect(a.kind === 'startMinigame' && a.spec.kind).toBe(firstKind);
+      applyMinigameResult(p, first, { kind: firstKind as MinigameResult['kind'], success: true, correct: 5, total: 5, answeredIds: [] }, ev);
+      expect(ev.at(-1)).toEqual({ type: 'mission.changed', missionId: next, status: 'available', count: 0 });
+      expect(decideNpcInteraction(p, npc, cityId)).toEqual({ kind: 'accept', missionId: next });
+      acceptMission(p, next, ev);
+      const nextDef = getMission(next)!;
+      expect(nextDef.objective.type === 'minigame' && nextDef.objective.spec.kind).toBe(nextKind);
+      expect(decideNpcInteraction(p, npc, cityId)).toEqual({ kind: 'startMinigame', missionId: next, spec: nextDef.objective.type === 'minigame' ? nextDef.objective.spec : null });
+    }
+    // guards hand out the defeat mission of their city's monster
+    const guards: [string, CityId, string, string][] = [['npc_karim', 'cairo', 'm_cairo_defeat', 'scarab'], ['npc_jackson', 'newyork', 'm_newyork_defeat', 'taxi_bug'], ['npc_ruby', 'sydney', 'm_sydney_defeat', 'seagull'], ['npc_pedro', 'rio', 'm_rio_defeat', 'monkey']];
+    for (const [npcId, cityId, mid, monster] of guards) {
+      const p = createProgress();
+      const npc = getNpc(cityId, npcId)!;
+      expect(decideNpcInteraction(p, npc, cityId)).toEqual({ kind: 'accept', missionId: mid });
+      const ev: ProgressEvent[] = [];
+      acceptMission(p, mid, ev);
+      for (let i = 0; i < 3; i++) countDefeat(p, monster, ev);
+      expect(decideNpcInteraction(p, npc, cityId)).toEqual({ kind: 'turnIn', missionId: mid });
+    }
   });
 
   it('star bonus on success: 3★ +10, 2★ +5, 1★ or none +0; stats.minigames counts clears only', () => {

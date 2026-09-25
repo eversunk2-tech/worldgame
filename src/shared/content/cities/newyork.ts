@@ -1,0 +1,163 @@
+// 뉴욕(미국, 북아메리카) city content (spec appendix A.4). Map rows are 30 × 40 chars, legend in content/tiles.ts (27 kinds).
+// 브루클린 다리(BB)를 건너 들어온다. 서쪽 허드슨강(열 0~1)·산책로(열 2), 동쪽 이스트강(열 37~39), 남쪽 항구(행 26~29). 애비뉴 열 8~9·20~21·32~33, 스트리트 행 9·14·19·24, 센트럴 파크 행 1~8 열 10~19, 타임스 스퀘어 행 10~13 열 13~18.
+import type { CityDef } from '../../types';
+import { BLANK_COUNT, BLANK_PASS, ORDER_COUNT, ORDER_PASS, ORDER_TRIES, QUIZ_COUNT, QUIZ_PASS } from '../../constants';
+
+export const NEWYORK: CityDef = {
+  id: 'newyork',
+  name: '뉴욕',
+  continent: 'north_america',
+  theme: { ground: 'grass', road: 'asphalt', building: 'skyscraper', tree: 'round', streetTree: 'round', water: 'sea', wall: 'hedge', bgm: 'newyork' },
+  landmarks: [
+    { id: 'lm_newyork_empire', kind: 'empire', at: { tx: 23, ty: 10 }, w: 2, h: 3, overhang: 4 },
+    // 남쪽 항구의 섬, 도달 불가 감상용 (A.4)
+    { id: 'lm_newyork_liberty', kind: 'liberty', at: { tx: 5, ty: 27 }, w: 2, h: 2, overhang: 3 },
+  ],
+  rows: [
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+    '~~-TTTTT==TTTTTTTTTT==TTTTTTTTTT==TTT~~~',
+    '~~--###-==.T......T.==-####-###-==-##~~~',
+    '~~--###-==..........==-####-###-==-##~~~',
+    '~~--###-==...~~~....==-####-###-==-##~~~',
+    '~~--###-==.b.~~~..b.==-####-###-==-##~~~',
+    '~~------==..........==----------==---~~~',
+    '~~--###-==.T..*...T.==-###--###-==-##~~~',
+    '~~--###-==ffff..ffff==-###--###-==-##~~~',
+    '~~-==================================~~~',
+    '~~--###-==-##QQQQQQ-==-PP--####-==-##~~~',
+    '~~--###-==-##QQQQQQ-==-PP--####-==-##~~~',
+    '~~--###-==-##QQQQQQ-==-PP--####-==-##~~~',
+    '~~--###-==-##lQQQQl-==-bb--####-==-##~~~',
+    '~~-==================================BBE',
+    '~~--###-==-####-###-==-###--###-==-##~~~',
+    '~~--###-==-####-###-==-###--###-==-##~~~',
+    '~~--###-==-####-###-==-###--###-==-##~~~',
+    '~~------==-v--------==-------v--==---~~~',
+    '~~-==================================~~~',
+    '~~--###-==-##-,,,,,,==,,,,,,-##-==-##~~~',
+    '~~--###-==-##-,,,,,,==,,,,,,-##-==-##~~~',
+    '~~--###-==-##-,,,,,,==,,,,,,-##-==-##~~~',
+    '~~------==----,,,,,,==,,,,,,----==---~~~',
+    '~~-==================================~~~',
+    '~~------==----------==----------==---~~~',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~', // row 26: water between Manhattan and Liberty Island (review Stage C M4)
+    '~~~~SPPS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+    '~~~~SPPS~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+    '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+  ],
+  entrance: { tx: 39, ty: 14 },
+  spawn: { tx: 36, ty: 14 },
+  spawnFacing: 'left',
+  cards: [
+    {
+      id: 'card_newyork_geo', cityId: 'newyork', topic: 'geo', title: '뉴욕의 지형',
+      lines: [
+        '북아메리카 대륙 동쪽, 미국 동해안에 있는 미국에서 가장 큰 도시이다(인구 약 830만 명).',
+        '허드슨강이 대서양으로 흘러드는 곳에 있고 도심은 맨해튼이라는 섬이다.',
+        '도로가 바둑판처럼 격자 모양(애비뉴와 스트리트)으로 뻗어 있고 고층 빌딩이 많다.',
+        '맨해튼 한가운데에 넓은 센트럴 파크가 있다.',
+        '서울에서 약 11,000km, 비행기로 14시간쯤 걸린다.',
+      ],
+    },
+    {
+      id: 'card_newyork_climate', cityId: 'newyork', topic: 'climate', title: '뉴욕의 기후',
+      lines: [
+        '서울과 위도가 비슷해 사계절이 뚜렷하다.',
+        '여름은 덥고 습하며(7월 평균 약 25°C) 겨울은 춥고 눈이 온다(1월 평균 약 1°C).',
+        '비와 눈이 1년 내내 고르게 내린다(1년 약 1,200mm).',
+        '서울과 달리 여름 한철에 비가 몰리지 않는다.',
+        '서울이 낮 12시일 때 뉴욕은 전날 밤 10시(여름에는 11시)이다.',
+      ],
+    },
+    {
+      id: 'card_newyork_culture', cityId: 'newyork', topic: 'culture', title: '뉴욕의 문화',
+      lines: [
+        '영어를 쓰고 화폐는 달러이다.',
+        '프랑스가 선물한 자유의 여신상(1886년), 엠파이어 스테이트 빌딩, 타임스 스퀘어, 브루클린 다리가 있다.',
+        '세계 여러 나라에서 온 이민자가 모여 살아 다양한 문화가 섞여 있다.',
+        '핫도그·베이글·피자를 즐겨 먹고 노란 택시와 지하철이 유명하다.',
+        '미국의 수도는 뉴욕이 아니라 워싱턴 D.C.이다.',
+      ],
+    },
+  ],
+  signs: [
+    { id: 'sign_newyork_geo', cardId: 'card_newyork_geo', at: { tx: 2, ty: 12 } },
+    { id: 'sign_newyork_climate', cardId: 'card_newyork_climate', at: { tx: 16, ty: 3 } },
+    { id: 'sign_newyork_culture', cardId: 'card_newyork_culture', at: { tx: 14, ty: 12 } },
+  ],
+  npcs: [
+    {
+      id: 'npc_emily', name: '에밀리', role: 'guide', at: { tx: 34, ty: 13 }, facing: 'down',
+      missionIds: ['m_newyork_quiz', 'm_newyork_blank'], cardId: 'card_newyork_geo', bubble: '헬로! 뉴욕이야',
+      idleText: '브루클린 다리를 건너면 맨해튼이야. 도로가 바둑판처럼 반듯하지?',
+    },
+    {
+      id: 'npc_noah', name: '노아', role: 'teacher', at: { tx: 17, ty: 6 }, facing: 'down',
+      missionIds: ['m_newyork_order', 'm_newyork_ox'], bubble: '센트럴 파크야',
+      idleText: '여기는 센트럴 파크. 고층 빌딩 사이에 있는 커다란 공원이야.',
+    },
+    {
+      id: 'npc_jackson', name: '잭슨', role: 'guard', at: { tx: 16, ty: 11 }, facing: 'down',
+      missionIds: ['m_newyork_defeat'], bubble: '택시 벌레 조심!',
+      idleText: '남쪽 공터에 노란 택시 벌레가 붕붕 돌아다녀. 조심해!',
+    },
+  ],
+  missions: [
+    {
+      id: 'm_newyork_quiz', cityId: 'newyork', giverNpcId: 'npc_emily', title: '뉴욕 지리 퀴즈',
+      description: '에밀리가 내는 뉴욕 퀴즈 5문제 중 4개 이상 맞히기',
+      objective: { type: 'minigame', spec: { kind: 'quiz', cityId: 'newyork', count: QUIZ_COUNT, passCount: QUIZ_PASS } },
+      rewardPoints: 40,
+      acceptText: '뉴욕에 대해 퀴즈를 내 볼게! 표지판을 먼저 읽고 오면 쉬울 거야. 준비되면 다시 말 걸어 줘.',
+      progressText: '퀴즈에 도전할 준비가 됐어?',
+      completeText: '어썸! 뉴욕은 이제 네 손바닥 안이야.',
+      failText: '아깝다! 표지판을 읽고 다시 도전해 봐.',
+    },
+    {
+      id: 'm_newyork_blank', cityId: 'newyork', giverNpcId: 'npc_emily', title: '뉴욕 빈칸 채우기',
+      description: '에밀리의 문장 4개 중 3개 이상 빈칸 채우기',
+      objective: { type: 'minigame', spec: { kind: 'blank', cityId: 'newyork', count: BLANK_COUNT, passCount: BLANK_PASS } },
+      rewardPoints: 30, prerequisiteMissionId: 'm_newyork_quiz',
+      acceptText: '이번엔 문장 빈칸이야. 보기에서 알맞은 말을 골라 봐.',
+      progressText: '빈칸 채우기에 도전할래?',
+      completeText: '완벽해! 뉴욕을 문장으로도 설명할 수 있구나.',
+      failText: '표지판 문장을 다시 읽고 도전해 봐.',
+    },
+    {
+      id: 'm_newyork_order', cityId: 'newyork', giverNpcId: 'npc_noah', title: '순서대로 맞추기',
+      description: '노아의 순서 문제 2개를 모두 맞히기(문제당 2번까지)',
+      objective: { type: 'minigame', spec: { kind: 'order', cityId: 'newyork', count: ORDER_COUNT, passCount: ORDER_PASS, triesPerQuestion: ORDER_TRIES } },
+      rewardPoints: 30,
+      acceptText: '센트럴 파크 벤치에서 순서 문제 하나 어때? 오래된 것부터, 서쪽부터 늘어놓아 봐.',
+      progressText: '순서 맞추기에 도전할래?',
+      completeText: '정확해! 역사와 지도를 한 줄로 꿰었어.',
+      failText: '카드 아래 숫자를 떠올리며 다시 해 보자.',
+    },
+    {
+      id: 'm_newyork_ox', cityId: 'newyork', giverNpcId: 'npc_noah', title: '뉴욕 OX 퀴즈',
+      description: '노아가 내는 OX 퀴즈 5문제 중 4개 이상 맞히기',
+      objective: { type: 'minigame', spec: { kind: 'ox', cityId: 'newyork', count: QUIZ_COUNT, passCount: QUIZ_PASS } },
+      rewardPoints: 30, prerequisiteMissionId: 'm_newyork_order',
+      acceptText: '뉴욕의 기후와 문화에 대해 OX 퀴즈를 내 볼게. 준비되면 다시 말 걸어 줘!',
+      progressText: 'OX 퀴즈에 도전해 볼래?',
+      completeText: '굿 잡! 뉴욕의 사계절을 잘 알고 있구나.',
+      failText: '아깝다! 표지판을 읽고 다시 도전해 봐.',
+    },
+    {
+      id: 'm_newyork_defeat', cityId: 'newyork', giverNpcId: 'npc_jackson', title: '택시 벌레 소탕',
+      description: '남쪽 공터의 노란 택시 벌레 3마리 처치',
+      objective: { type: 'defeat', monsterId: 'taxi_bug', count: 3 },
+      rewardPoints: 30,
+      acceptText: '남쪽 공터에 노란 택시 벌레가 너무 많아. 3마리만 뿅 하고 없애 줄래? F 키로 공격할 수 있어.',
+      progressText: '택시 벌레는 아직 남아 있어?',
+      completeText: '땡큐! 덕분에 거리가 조용해졌어.',
+    },
+  ],
+  monsterZones: [
+    { monsterId: 'pizza_rat', center: { tx: 11, ty: 6 }, radiusTiles: 2, count: 3 },
+    { monsterId: 'taxi_bug', center: { tx: 16, ty: 21 }, radiusTiles: 2, count: 3 },
+    { monsterId: 'taxi_bug', center: { tx: 24, ty: 21 }, radiusTiles: 2, count: 3 },
+  ],
+  // every mission counts toward the stamp (spec 8.2, 14.5)
+  stampMissionIds: ['m_newyork_quiz', 'm_newyork_blank', 'm_newyork_order', 'm_newyork_ox', 'm_newyork_defeat'],
+};

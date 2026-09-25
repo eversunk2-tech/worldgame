@@ -1,8 +1,13 @@
 // localStorage adapter (spec 6.8). The only file that touches localStorage. Validation lives in shared/save/schema.
 import type { Progress } from '../shared/types';
-import { LEGACY_KEYS, SAVE_KEY, migrate, toSave } from '../shared/save/schema';
+import { LEGACY_KEYS, SAVE_KEY, SAVE_VERSION, migrate, toSave } from '../shared/save/schema';
 
 const SAVE_THROTTLE_MS = 500;
+/**
+ * Original text of a save from another version, stored once before it is migrated (spec 13: v0.1 saves must not be
+ * lost to a migration bug). Kept when an unusable save is discarded; removed only when the player deletes progress.
+ */
+export const BACKUP_KEY = 'play1.progress.backup';
 
 type Listener = () => void;
 
@@ -56,16 +61,25 @@ class Storage {
       parsed = JSON.parse(text);
     } catch (err) {
       console.warn('[storage] corrupt save (not JSON), starting a new game:', err);
-      this.clear();
+      this.discard();
       return null;
     }
+    const version = typeof parsed === 'object' && parsed !== null ? (parsed as { version?: unknown }).version : SAVE_VERSION;
+    if (version !== SAVE_VERSION) this.backupOnce(text); // e.g. a v0.1 (v2) save about to be migrated
     const data = migrate(parsed);
     if (!data) {
       console.warn('[storage] invalid save data, starting a new game');
-      this.clear();
+      this.discard();
       return null;
     }
     return data.progress;
+  }
+
+  /** Keep the pre-migration text once; an existing backup is never overwritten. Failures are ignored. */
+  private backupOnce(text: string): void {
+    try {
+      if (localStorage.getItem(BACKUP_KEY) === null) localStorage.setItem(BACKUP_KEY, text);
+    } catch { /* best effort: the game goes on without a backup */ }
   }
 
   /** Mark dirty and schedule a throttled save. */
@@ -99,7 +113,14 @@ class Storage {
     }
   }
 
+  /** Delete the save and its migration backup (진행 초기화 / 새로 시작 — the player chose to drop the progress). */
   clear(): void {
+    this.discard();
+    try { localStorage.removeItem(BACKUP_KEY); } catch { /* ignore */ }
+  }
+
+  /** Drop the current save (unusable data) but keep the backup, so a failed migration can still be recovered. */
+  private discard(): void {
     this.dirty = false;
     if (this.timer !== null) { window.clearTimeout(this.timer); this.timer = null; }
     try { localStorage.removeItem(SAVE_KEY); } catch (err) { console.warn('[storage] clear failed:', err); }

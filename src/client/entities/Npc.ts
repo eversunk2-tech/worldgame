@@ -14,6 +14,19 @@ const NPC_LOOKS: Record<string, AvatarEquip> = {
   npc_marie: { body: 'body_light', top: 'top_mariniere', hair: 'hair_pony_blue', hat: 'hat_beret' },
   npc_louis: { body: 'body_light', top: 'top_hoodie_green', hair: 'hair_curly_red', hat: null },
   npc_pierre: { body: 'body_tan', top: 'top_mariniere', hair: 'hair_short_black', hat: 'hat_cap_red' },
+  // Stage C (spec 5.6 NPC 외형 table)
+  npc_amir: { body: 'body_tan', top: 'robe_white', hair: 'hair_short_black', hat: null },
+  npc_nadia: { body: 'body_tan', top: 'top_tshirt_blue', hair: 'hair_long_brown', hat: null },
+  npc_karim: { body: 'body_dark', top: 'top_hoodie_green', hair: 'hair_short_black', hat: 'hat_cap_red' },
+  npc_emily: { body: 'body_light', top: 'top_hoodie_green', hair: 'hair_long_brown', hat: null },
+  npc_noah: { body: 'body_tan', top: 'top_tshirt_blue', hair: 'hair_curly_red', hat: 'hat_cap_red' },
+  npc_jackson: { body: 'body_dark', top: 'top_tshirt_blue', hair: 'hair_short_black', hat: 'hat_cap_red' },
+  npc_olivia: { body: 'body_light', top: 'top_tshirt_blue', hair: 'hair_pony_blue', hat: null },
+  npc_jack: { body: 'body_tan', top: 'top_hoodie_green', hair: 'hair_short_black', hat: 'hat_cork' },
+  npc_ruby: { body: 'body_dark', top: 'top_hoodie_green', hair: 'hair_curly_red', hat: null },
+  npc_lucas: { body: 'body_tan', top: 'top_brazil', hair: 'hair_short_black', hat: null },
+  npc_isabela: { body: 'body_dark', top: 'dress_plain', hair: 'hair_long_brown', hat: null },
+  npc_pedro: { body: 'body_light', top: 'top_tshirt_blue', hair: 'hair_curly_red', hat: 'hat_cap_red' },
 };
 const ROLE_LOOKS: Record<NpcDef['role'], AvatarEquip> = {
   guide: { body: 'body_light', top: 'top_hoodie_green', hair: 'hair_long_brown', hat: null },

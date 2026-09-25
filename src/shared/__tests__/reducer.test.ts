@@ -56,12 +56,12 @@ describe('reducer scenario', () => {
     ]);
     expect(p.missions.m_seoul_quiz!.attempts).toBe(2);
 
-    // ox mission → paris unlocks
+    // ox mission → paris + the four Stage C cities unlock together (spec 8.2 rule A)
     applyAction(p, { type: 'mission.accept', missionId: 'm_seoul_ox' });
     const ox = playQuiz(p, 'm_seoul_ox', 'ox', 5);
-    expect(ox.map((e) => e.type)).toEqual(['mission.changed', 'points.changed', 'mission.changed', 'city.unlocked']);
+    expect(ox.map((e) => e.type)).toEqual(['mission.changed', 'points.changed', 'mission.changed', ...Array<string>(5).fill('city.unlocked')]);
     expect(ox[2]).toEqual({ type: 'mission.changed', missionId: 'm_seoul_map', status: 'available', count: 0 });
-    expect(ox.at(-1)).toEqual({ type: 'city.unlocked', cityId: 'paris' });
+    expect(ox.slice(3)).toEqual((['paris', 'cairo', 'newyork', 'sydney', 'rio'] as const).map((cityId) => ({ type: 'city.unlocked', cityId })));
     expect(p.points).toBe(75);
     expect(cityState(p, getMarker('paris'))).toBe('open');
     expect(applyAction(p, { type: 'city.enter', cityId: 'paris' })).toEqual([]);

@@ -1,5 +1,6 @@
-// Pure auto-tiling helpers (spec 5.3): deterministic variation, water 8-neighbour masks, road 4-neighbour masks,
-// bridge / crosswalk / fence orientation. No rendering here — the client maps the returned variant names to frames.
+// Pure auto-tiling helpers (spec 5.3): deterministic variation, water 8-neighbour masks (with 1-wide channels),
+// road 4-neighbour masks, bridge / crosswalk / fence orientation. No rendering here — the client maps the returned
+// variant names to frames.
 
 export type Rows = readonly string[];
 
@@ -49,37 +50,60 @@ export function waterMask(rows: Rows, tx: number, ty: number): number {
   return m;
 }
 
-export type WaterVariant =
+/** The 13 shapes the tile sheets provide (edges and corners are named by their land sides: edge_n = land to the N). */
+export type BaseWaterVariant =
   | 'fill' | 'edge_n' | 'edge_e' | 'edge_s' | 'edge_w'
   | 'c_ne' | 'c_nw' | 'c_se' | 'c_sw' | 'in_ne' | 'in_nw' | 'in_se' | 'in_sw';
+/**
+ * Shapes the sheets do not have; the client stitches them from quadrants of the base cells. Channels are 1 tile
+ * wide: ch_h = land N and S (water runs E–W), ch_v = land E and W; ch_end_<d> = a channel's closed end, land on <d>
+ * and both sides (e.g. ch_end_n = land N, E, W — the water continues S); lone = a 1-tile pool. Any other mix (an
+ * edge or outer corner plus inner corners, several inner corners) is `q_<nw><ne><sw><se>` of quadrant codes.
+ */
+export type CompositeWaterVariant = 'ch_h' | 'ch_v' | 'ch_end_n' | 'ch_end_e' | 'ch_end_s' | 'ch_end_w' | 'lone' | `q_${string}`;
+export type WaterVariant = BaseWaterVariant | CompositeWaterVariant;
 
 /**
- * Water tile shape from its 8-neighbour mask. Land on one side → edge; land on two adjacent sides → outer corner
- * (named by the land sides, e.g. c_nw = land to the N and W); all four sides water but a diagonal is land → inner
- * corner. Degenerate cases (land on opposite sides / 3 sides) fall back to an edge or corner.
+ * One water quadrant, from its two orthogonal neighbours and the diagonal between them: both land → outer corner 'c';
+ * one land → that side's shore band 'n' | 'e' | 's' | 'w'; neither but the diagonal → inner corner 'i'; else open 'f'.
+ */
+export type WaterQuad = 'f' | 'n' | 'e' | 's' | 'w' | 'c' | 'i';
+export const WATER_CORNERS = ['nw', 'ne', 'sw', 'se'] as const;
+export type WaterCorner = (typeof WATER_CORNERS)[number];
+
+/** Quadrants (order nw, ne, sw, se) of a water tile from its 8-neighbour mask (bit set = water-like). */
+export function waterQuads(mask: number): [WaterQuad, WaterQuad, WaterQuad, WaterQuad] {
+  const land = (bit: number) => (mask & bit) === 0;
+  const quad = (a: number, b: number, diag: number, qa: WaterQuad, qb: WaterQuad): WaterQuad =>
+    land(a) && land(b) ? 'c' : land(a) ? qa : land(b) ? qb : land(diag) ? 'i' : 'f';
+  return [quad(N, W, NW, 'n', 'w'), quad(N, E, NE, 'n', 'e'), quad(S, W, SW, 's', 'w'), quad(S, E, SE, 's', 'e')];
+}
+
+/** Quadrant codes (nw ne sw se) of every named shape; everything else is `q_<codes>`. */
+export const WATER_SHAPES: Readonly<Record<string, BaseWaterVariant | Exclude<CompositeWaterVariant, `q_${string}`>>> = {
+  ffff: 'fill', nnff: 'edge_n', fefe: 'edge_e', ffss: 'edge_s', wfwf: 'edge_w',
+  cnwf: 'c_nw', ncfe: 'c_ne', wfcs: 'c_sw', fesc: 'c_se',
+  ifff: 'in_nw', fiff: 'in_ne', ffif: 'in_sw', fffi: 'in_se',
+  nnss: 'ch_h', wewe: 'ch_v', ccwe: 'ch_end_n', ncsc: 'ch_end_e', wecc: 'ch_end_s', cncs: 'ch_end_w', cccc: 'lone',
+};
+const BASE_WATER = new Set<string>(['fill', 'edge_n', 'edge_e', 'edge_s', 'edge_w', 'c_ne', 'c_nw', 'c_se', 'c_sw', 'in_ne', 'in_nw', 'in_se', 'in_sw']);
+export const isBaseWaterVariant = (v: string): v is BaseWaterVariant => BASE_WATER.has(v);
+
+/**
+ * Water tile shape from its 8-neighbour mask. Land on one side → edge; two adjacent sides → outer corner (c_nw = land
+ * N and W); only a diagonal → inner corner. Land on opposite sides is a 1-wide channel with shore bands on both
+ * banks (Stage C: Paris's Île de la Cité channels no longer lose their island-side border).
  */
 export function waterVariant(mask: number): WaterVariant {
-  const n = (mask & N) !== 0, e = (mask & E) !== 0, s = (mask & S) !== 0, w = (mask & W) !== 0;
-  const landCount = [n, e, s, w].filter((x) => !x).length;
-  if (landCount === 0) {
-    if (!(mask & NE)) return 'in_ne';
-    if (!(mask & NW)) return 'in_nw';
-    if (!(mask & SE)) return 'in_se';
-    if (!(mask & SW)) return 'in_sw';
-    return 'fill';
-  }
-  if (landCount === 1) {
-    if (!n) return 'edge_n';
-    if (!e) return 'edge_e';
-    if (!s) return 'edge_s';
-    return 'edge_w';
-  }
-  if (!n && !w) return 'c_nw';
-  if (!n && !e) return 'c_ne';
-  if (!s && !w) return 'c_sw';
-  if (!s && !e) return 'c_se';
-  // opposite sides are land (1-wide channel): treat as an edge on the north/west side
-  return !n ? 'edge_n' : 'edge_w';
+  const code = waterQuads(mask).join('');
+  return WATER_SHAPES[code] ?? `q_${code}`;
+}
+
+/** Every shape `waterVariant` can return (all 256 masks) with its quadrants — the client builds one frame per shape. */
+export function allWaterVariants(): { variant: WaterVariant; quads: [WaterQuad, WaterQuad, WaterQuad, WaterQuad] }[] {
+  const seen = new Map<string, [WaterQuad, WaterQuad, WaterQuad, WaterQuad]>();
+  for (let m = 0; m < 256; m++) { const v = waterVariant(m); if (!seen.has(v)) seen.set(v, waterQuads(m)); }
+  return [...seen].map(([variant, quads]) => ({ variant: variant as WaterVariant, quads }));
 }
 
 // ------------------------------------------------------------------ roads

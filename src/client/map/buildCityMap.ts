@@ -1,6 +1,8 @@
-// CityDef.rows → 3 Tilemap layers on the tile atlas (spec 5.3): ground (theme ground, roads, water, bridges),
+// CityDef.rows → 3 Tilemap layers on the tile atlas (spec 5.3): ground (floors, roads, water, bridges; under solid
+// tiles the neighbours' most common floor, one floor per landmark footprint — shared/map/floor.ts),
 // deco (flowers, entrance mark, crosswalks) and objects (every solid tile, with collision). Landmarks are sprites
-// y-sorted with the actors. Built once per city entry; nothing here runs per frame.
+// y-sorted with the actors; asphalt bridges get railings (a Graphics under the overlays). Built once per city entry;
+// nothing here runs per frame.
 import Phaser from 'phaser';
 import type { CityDef, TilePos } from '../../shared/types';
 import { MAP_COLS, MAP_HEIGHT, MAP_ROWS, MAP_WIDTH, TILE_SIZE } from '../../shared/constants';
@@ -9,6 +11,7 @@ import {
   bridgeVariant, crosswalkVariant, fenceVariant, groundVariant, hash, roadMask, roadVariant, rockVariant, waterMask, waterVariant,
 } from '../../shared/map/autotile';
 import { buildingParts, findBuildings } from '../../shared/map/buildings';
+import { floorUnder } from '../../shared/map/floor';
 import type { BuiltAtlas } from '../assets/atlasBuilder';
 import { TEX } from '../assets/manifest';
 import { atlases, buildingFrame, buildingVariantCount, groundNames, roadName, treeName, wallName, waterNames, type BuildingPartFrame } from '../assets/tileAtlas';
@@ -53,6 +56,19 @@ export function buildCityMap(scene: Phaser.Scene, city: CityDef): CityMap {
     const v = groundVariant(tx, ty);
     return f(v === 'base' ? g.base : v === 'alt' ? g.alt : g.flower);
   };
+  /** Ground frame of a floor char; grass, flowers and anything else take the theme ground. */
+  const floorFrame = (ch: string, tx: number, ty: number): number => {
+    switch (ch) {
+      case ',': return f('dark_grass');
+      case 'S': return f(groundVariant(tx, ty) === 'alt' ? 'sand_2' : 'sand');
+      case 's': return f('dark_sand');
+      case 'F': return f('farm');
+      case 'd': return f('dirt');
+      case '-': return f('sidewalk');
+      case 'Q': return f('plaza');
+      default: return themeGround(tx, ty);
+    }
+  };
 
   // buildings: rectangles → parts, one palette variant per building
   const { rects } = findBuildings(rows);
@@ -73,17 +89,14 @@ export function buildCityMap(scene: Phaser.Scene, city: CityDef): CityMap {
       const ch = row[tx] ?? '.';
       const info = tileForChar(ch);
       if (!info) continue;
-      let ground = themeGround(tx, ty);
+      // solid tiles (houses, lamps, benches, trees, …) show their neighbours' floor through transparent pixels instead
+      // of always the theme ground (review Stage C M5); a tie takes the theme ground and a landmark footprint one floor
+      // from the ring around it (re-review N2); water and parked cars keep their own ground below
+      const under = info.solid && ch !== '~' && ch !== 'v' ? floorUnder(rows, tx, ty) : null;
+      let ground = floorFrame(under ?? ch, tx, ty);
       let deco = EMPTY;
       let obj = objIdx[ty]![tx]!;
       switch (ch) {
-        case ',': ground = f('dark_grass'); break;
-        case 'S': ground = f(groundVariant(tx, ty) === 'alt' ? 'sand_2' : 'sand'); break;
-        case 's': ground = f('dark_sand'); break;
-        case 'F': ground = f('farm'); break;
-        case 'd': ground = f('dirt'); break;
-        case '-': ground = f('sidewalk'); break;
-        case 'Q': ground = f('plaza'); break;
         case '=':
         case 'E':
         case 'x': {
@@ -97,7 +110,9 @@ export function buildCityMap(scene: Phaser.Scene, city: CityDef): CityMap {
           obj = f('blank_solid');
           break;
         }
-        case 'B': ground = f(bridgeVariant(rows, tx, ty) === 'h' ? 'bridge_h' : 'bridge_v'); break;
+        // bridges carry the theme's road: asphalt cities (New York, Sydney) get an asphalt deck that joins the streets —
+        // the Harbour Bridge overlay adds footpaths and arches on top (review Stage C L11); other themes keep planks
+        case 'B': ground = theme.road === 'asphalt' ? f(roadName(theme.road, roadVariant(roadMask(rows, tx, ty)))) : f(bridgeVariant(rows, tx, ty) === 'h' ? 'bridge_h' : 'bridge_v'); break;
         case '*': deco = f(hash(tx, ty) % 2 === 0 ? 'flower_a' : 'flower_b'); break;
         case 'T': obj = f(treeName(theme.tree)); break;
         case 'Y': obj = f(treeName(theme.streetTree)); break;
@@ -151,5 +166,45 @@ export function buildCityMap(scene: Phaser.Scene, city: CityDef): CityMap {
     landmarks.push(img);
   }
 
+  if (theme.road === 'asphalt') drawBridgeRails(scene, rows);
+
   return { map, ground, deco, objects, layer: objects, entrance, landmarks };
+}
+
+/** Railing colours: light top rail and posts, dark shadow line on the deck side. */
+const RAIL = 0xd2d7dd;
+const RAIL_SHADE = 0x4b5058;
+
+/**
+ * Asphalt bridges read as bridges, not as a road on the water (re-review N5): every 'B' edge that faces water gets a
+ * grey railing — a 1-art-pixel light rail on the edge, a 1-pixel shadow on the deck side and a post every 8 art pixels.
+ * New York's east entrance gets rails on its north and south edges, the Harbour Bridge deck on its west and east edges
+ * (its overlay at depth 1.5 draws over them). Depth 1.2: above the deco layer, under overlays, objects and actors.
+ */
+function drawBridgeRails(scene: Phaser.Scene, rows: readonly string[]): void {
+  const g = scene.add.graphics().setDepth(1.2);
+  const T = TILE_SIZE;
+  const U = TILE_SIZE / 16; // one art pixel
+  const water = (tx: number, ty: number) => rows[ty]?.[tx] === '~';
+  for (let ty = 0; ty < rows.length; ty++) {
+    for (let tx = 0; tx < rows[ty]!.length; tx++) {
+      if (rows[ty]![tx] !== 'B') continue;
+      const x = tx * T;
+      const y = ty * T;
+      // horizontal rails (water to the north / south)
+      for (const [dy, edge, inner] of [[-1, y, y + U], [1, y + T - U, y + T - 2 * U]] as const) {
+        if (!water(tx, ty + dy)) continue;
+        g.fillStyle(RAIL_SHADE).fillRect(x, inner, T, U);
+        g.fillStyle(RAIL).fillRect(x, edge, T, U);
+        for (const px of [3, 11]) g.fillRect(x + px * U, Math.min(edge, inner), U * 2, U * 2);
+      }
+      // vertical rails (water to the west / east)
+      for (const [dx, edge, inner] of [[-1, x, x + U], [1, x + T - U, x + T - 2 * U]] as const) {
+        if (!water(tx + dx, ty)) continue;
+        g.fillStyle(RAIL_SHADE).fillRect(inner, y, U, T);
+        g.fillStyle(RAIL).fillRect(edge, y, U, T);
+        for (const py of [3, 11]) g.fillRect(Math.min(edge, inner), y + py * U, U * 2, U * 2);
+      }
+    }
+  }
 }

@@ -35,12 +35,12 @@ export const SEOUL_MINIGAMES: MinigameContent = {
     {
       id: 'seoul_r02', cityId: 'seoul', prompt: '북쪽에 있는 도시부터 순서대로', direction: 'desc',
       items: [
-        { label: '파리', value: 48.9, note: '위도 48.9°' },
-        { label: '서울', value: 37.6, note: '위도 37.6°' },
-        { label: '카이로', value: 30.0, note: '위도 30.0°' },
-        { label: '시드니', value: -33.9, note: '위도 -33.9°' },
+        { label: '파리', value: 48.9, note: '북위 48.9°' },
+        { label: '서울', value: 37.6, note: '북위 37.6°' },
+        { label: '카이로', value: 30.0, note: '북위 30.0°' },
+        { label: '시드니', value: -33.9, note: '남위 33.9°' },
       ],
-      explanation: '위도가 높을수록 북쪽이에요. 시드니는 남반구라 위도가 마이너스예요',
+      explanation: '북위가 높을수록 북쪽이에요. 시드니는 남반구라 남위로 나타내요',
     },
   ],
   // explanation = the completed sentence (A.1)

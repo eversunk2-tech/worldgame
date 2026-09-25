@@ -133,7 +133,7 @@ describe('save schema v3', () => {
       { itemId: 'nope', gx: 5, gy: 5 },
       { itemId: 'fur_chair', gx: 1, gy: 1 }, // overlaps rug
     ];
-    p.stamps = ['seoul', 'cairo' as 'seoul', 'seoul'];
+    p.stamps = ['seoul', 'beijing', 'seoul']; // beijing is a comingSoon marker, not a playable city
     p.readCards = ['card_seoul_geo', 'bogus'];
     p.missions.m_paris_ox = { missionId: 'm_paris_ox', status: 'weird' as 'active', count: 1, attempts: 1 };
     (p.missions as Record<string, unknown>).fake = { missionId: 'fake', status: 'active', count: 0, attempts: 0 };
@@ -153,5 +153,47 @@ describe('save schema v3', () => {
     expect(q.missions.m_paris_ox!.status).toBe('available');
     expect(q.missions.fake).toBeUndefined();
     expect(q.profile.name).toHaveLength(12);
+  });
+
+  it('keeps the new cities: lastCity rio, six stamps, their souvenirs and a room of souvenirs (spec 9, C-6)', () => {
+    const p = createProgress();
+    const all = ['seoul', 'paris', 'cairo', 'newyork', 'sydney', 'rio'] as const;
+    p.stamps = [...all];
+    for (const m of ALL_MISSIONS) p.missions[m.id]!.status = 'turnedIn';
+    p.owned.push('fur_souvenir_cairo', 'fur_souvenir_newyork', 'fur_souvenir_sydney', 'fur_souvenir_rio', 'hat_pharaoh', 'top_brazil');
+    p.avatar = { body: 'body_dark', hair: 'hair_short_black', top: 'top_brazil', hat: 'hat_pharaoh' };
+    p.room = [{ itemId: 'fur_souvenir_cairo', gx: 0, gy: 0 }, { itemId: 'fur_souvenir_rio', gx: 7, gy: 5 }];
+    p.lastCity = 'rio';
+    const s = validate(JSON.parse(JSON.stringify(toSave(p, 7))));
+    expect(s).not.toBeNull();
+    const q = s!.progress;
+    expect(q.lastCity).toBe('rio');
+    expect(q.stamps).toEqual([...all]);
+    expect(q.avatar).toEqual({ body: 'body_dark', hair: 'hair_short_black', top: 'top_brazil', hat: 'hat_pharaoh' });
+    expect(q.room).toEqual(p.room);
+    expect(q.missions.m_rio_defeat!.status).toBe('turnedIn');
+    expect(Object.keys(q.missions)).toHaveLength(30);
+  });
+
+  it('a v0.1 save meets the new cities: their missions start fresh, body_dark is added as a starter', () => {
+    const s = migrate(JSON.parse(JSON.stringify(V2_FIXTURE)));
+    const p = s!.progress;
+    expect(p.owned).toContain('body_dark');
+    for (const id of ['m_cairo_quiz', 'm_cairo_match', 'm_newyork_quiz', 'm_newyork_order', 'm_sydney_quiz', 'm_sydney_map', 'm_rio_quiz', 'm_rio_blank', 'm_cairo_defeat']) {
+      expect([id, p.missions[id]!.status]).toEqual([id, 'available']);
+    }
+    for (const id of ['m_cairo_map', 'm_cairo_ox', 'm_newyork_blank', 'm_newyork_ox', 'm_sydney_match', 'm_sydney_blank', 'm_rio_order', 'm_rio_ox']) {
+      expect([id, p.missions[id]!.status]).toEqual([id, 'locked']);
+    }
+  });
+
+  it('a stamp of a new city forces its five missions to turnedIn; unknown cities are dropped from lastCity', () => {
+    const s = validate({ version: 3, progress: { stamps: ['cairo'], lastCity: 'nairobi', missions: { m_cairo_ox: { status: 'available', count: 0, attempts: 0 } } } });
+    const p = s!.progress;
+    expect(p.stamps).toEqual(['cairo']);
+    for (const id of ['m_cairo_quiz', 'm_cairo_map', 'm_cairo_match', 'm_cairo_ox', 'm_cairo_defeat']) expect(p.missions[id]!.status).toBe('turnedIn');
+    expect(p.missions.m_newyork_quiz!.status).toBe('available');
+    expect(p.lastCity).toBeNull();
+    expect(validate({ version: 3, progress: { lastCity: 'sydney' } })!.progress.lastCity).toBe('sydney');
   });
 });

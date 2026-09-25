@@ -33,7 +33,7 @@ export const CHAR_PARTS: Record<string, CharPart> = {
   top_hoodie_green: cell(62, 'mono'),                       // (8,1) shirt with light bib (reads as a hood front)
   top_hanbok: cell(114, 'mono', { overlay: 'hanbok_ribbon' }), // (6,2) long tunic widening at the hem
   top_mariniere: cell(226, 'none', { overlay: 'stripes' }), // white t-shirt + navy stripes
-  top_brazil: cell(226, 'mono', { overlay: 'brazil_collar', color: 0xf9d342 }), // spec 8.4 colour until Stage C adds the ItemDef
+  top_brazil: cell(226, 'mono', { overlay: 'brazil_collar' }), // white t-shirt tinted with the ItemDef yellow (0xf9d342) + green collar
   // hats
   hat_cap_red: { code: 'cap' },                             // no cap with a visor in the pack → code
   hat_gat: cell(460, 'mono'),                               // (28,8) wide-brim hat

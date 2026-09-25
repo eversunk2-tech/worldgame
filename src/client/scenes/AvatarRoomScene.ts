@@ -1,5 +1,6 @@
-// Avatar room: profile, preview, shop (hair/top/hat/furniture), 8×6 furniture grid (spec 5.10). v0.2: Indoors
-// atlas floor/wall, 3× furniture textures, 6× preview, part icons on shop cards, room BGM, speaker button.
+// Avatar room: profile, preview, shop (skin/hair/top/hat/furniture), 8×6 furniture grid (spec 5.10). v0.2: Indoors
+// atlas floor/wall, 3× furniture textures, 6× preview, part icons on shop cards, room BGM, speaker button; Stage C:
+// shop pages (◀ ▶) once a tab has more cards than fit, and a skin tab so the new body_dark can be worn (spec 8.4).
 import Phaser from 'phaser';
 import type { ItemDef, ItemSlot } from '../../shared/types';
 import { ROOM_COLS, ROOM_ROWS } from '../../shared/constants';
@@ -29,14 +30,24 @@ const ROOM_H = 22 + CELL + GRID_H + 12;
 const SHOP_X = ROOM_X;
 const SHOP_Y = ROOM_Y + ROOM_H + 6;
 const CARD_W = 150;
-const CARD_H = 40;
-const TABS: { slot: Exclude<ItemSlot, 'body'>; name: string }[] = [
-  { slot: 'hair', name: '머리' }, { slot: 'top', name: '옷' }, { slot: 'hat', name: '모자' }, { slot: 'furniture', name: '가구' },
+const CARD_H = 46; // room for a two-line item name above the status line (review Stage C L8)
+const CARD_GAP = 4;
+const CARD_COLS = 4;
+/** The shop panel below the room holds two card rows → 8 cards per page (spec 8.4 page buttons ◀ ▶). */
+const CARD_ROWS = 2;
+const PAGE_SIZE = CARD_COLS * CARD_ROWS;
+const TAB_W = 84;
+const TABS: { slot: ItemSlot; name: string }[] = [
+  { slot: 'body', name: '피부' }, { slot: 'hair', name: '머리' }, { slot: 'top', name: '옷' }, { slot: 'hat', name: '모자' }, { slot: 'furniture', name: '가구' },
 ];
 
 export class AvatarRoomScene extends Phaser.Scene {
-  private tab: Exclude<ItemSlot, 'body'> = 'hair';
+  private tab: ItemSlot = 'hair';
+  private page = 0;
   private tabButtons: Button[] = [];
+  private prevBtn!: Button;
+  private nextBtn!: Button;
+  private pageText!: Phaser.GameObjects.Text;
   private cards: Phaser.GameObjects.Container[] = [];
   private placed: Phaser.GameObjects.Image[] = [];
   private preview!: Phaser.GameObjects.Sprite;
@@ -95,10 +106,15 @@ export class AvatarRoomScene extends Phaser.Scene {
     // --- shop panel
     new Panel(this, SHOP_X, SHOP_Y, { width: 640, height: GAME_HEIGHT - SHOP_Y - 12 });
     TABS.forEach((t, i) => {
-      const b = new Button(this, SHOP_X + 12 + i * 110, SHOP_Y + 8, t.name, { width: 100, height: 28, size: 'small', onClick: () => this.selectTab(t.slot) });
+      const b = new Button(this, SHOP_X + 12 + i * (TAB_W + 6), SHOP_Y + 8, t.name, { width: TAB_W, height: 28, size: 'small', onClick: () => this.selectTab(t.slot) });
       this.tabButtons.push(b);
     });
-    this.message = this.add.text(SHOP_X + 628, GAME_HEIGHT - 16, '', textStyle({ size: 'small', color: THEME.dangerCss })).setOrigin(1, 1);
+    this.prevBtn = new Button(this, SHOP_X + 532, SHOP_Y + 8, '◀', { width: 32, height: 28, size: 'small', onClick: () => this.turnPage(-1) });
+    this.nextBtn = new Button(this, SHOP_X + 596, SHOP_Y + 8, '▶', { width: 32, height: 28, size: 'small', onClick: () => this.turnPage(1) });
+    this.pageText = this.add.text(SHOP_X + 580, SHOP_Y + 22, '', textStyle({ size: 'small', color: THEME.textDim })).setOrigin(0.5);
+    // notices sit in the free space of the profile panel under the preview, never under the shop cards (review Stage C L7)
+    this.message = this.add.text(152, 414, '', textStyle({ size: 'small', color: THEME.dangerCss, align: 'center', wordWrap: { width: 250, useAdvancedWrap: true } }))
+      .setOrigin(0.5, 0).setDepth(20);
 
     const K = Phaser.Input.Keyboard.KeyCodes;
     this.keys = { esc: this.input.keyboard!.addKey(K.ESC), n: this.input.keyboard!.addKey(K.N) };
@@ -245,9 +261,23 @@ export class AvatarRoomScene extends Phaser.Scene {
 
   // ------------------------------------------------------------ shop
 
-  private selectTab(slot: Exclude<ItemSlot, 'body'>): void {
+  private selectTab(slot: ItemSlot): void {
     this.tab = slot;
+    this.page = 0;
     this.tabButtons.forEach((b, i) => b.setSelected(TABS[i]!.slot === slot));
+    this.cancelPlacing();
+    this.refreshShop();
+  }
+
+  private pageCount(): number {
+    return Math.max(1, Math.ceil(itemsForSlot(this.tab).length / PAGE_SIZE));
+  }
+
+  private turnPage(delta: number): void {
+    const n = this.pageCount();
+    const next = Math.max(0, Math.min(n - 1, this.page + delta));
+    if (next === this.page) return;
+    this.page = next;
     this.cancelPlacing();
     this.refreshShop();
   }
@@ -256,12 +286,18 @@ export class AvatarRoomScene extends Phaser.Scene {
     for (const c of this.cards) c.destroy();
     this.cards = [];
     const p = session.progress;
-    const items = itemsForSlot(this.tab);
+    const pages = this.pageCount();
+    this.page = Math.min(this.page, pages - 1);
+    // page controls only when the tab overflows one page (furniture: 6 + 6 souvenirs = 12 cards)
+    this.prevBtn.setVisible(pages > 1).setEnabled(this.page > 0);
+    this.nextBtn.setVisible(pages > 1).setEnabled(this.page < pages - 1);
+    this.pageText.setText(pages > 1 ? `${this.page + 1}/${pages}` : '');
+    const items = itemsForSlot(this.tab).slice(this.page * PAGE_SIZE, (this.page + 1) * PAGE_SIZE);
     items.forEach((item, i) => {
-      const col = i % 4;
-      const row = Math.floor(i / 4);
+      const col = i % CARD_COLS;
+      const row = Math.floor(i / CARD_COLS);
       const x = SHOP_X + 12 + col * (CARD_W + 8);
-      const y = SHOP_Y + 44 + row * (CARD_H + 6);
+      const y = SHOP_Y + 40 + row * (CARD_H + CARD_GAP);
       const owned = p.owned.includes(item.id);
       const equipped = item.slot !== 'furniture' && p.avatar[item.slot] === item.id;
       const placed = item.slot === 'furniture' && p.room.some((r) => r.itemId === item.id);
@@ -280,8 +316,11 @@ export class AvatarRoomScene extends Phaser.Scene {
       const icon = item.slot === 'furniture'
         ? this.add.image(22, CARD_H / 2, TEX.furniture(item.id)).setDisplaySize(28, 28)
         : this.add.image(22, CARD_H / 2, partIconKey(this, item.id));
-      const name = this.add.text(44, 5, item.name.length > 9 ? `${item.name.slice(0, 9)}…` : item.name, textStyle({ size: 'small' }));
-      const st = this.add.text(44, CARD_H - 4, status, textStyle({ size: 'small', color: equipped || placed ? THEME.successCss : owned ? THEME.textDim : affordable ? THEME.accentCss : '#8a8a8a' })).setOrigin(0, 1);
+      // full name on up to two lines (review Stage C L8: '자유의 여신상 왕관', '브라질 축구 유니폼' …). 12px text boxes are
+      // 16px tall, so the name lines are pulled 3px closer and the status sits on the card's bottom edge: 3 lines fit
+      // in the 46px card without the second name line touching the price
+      const name = this.add.text(42, 2, item.name, textStyle({ size: 'small', wordWrap: { width: CARD_W - 46, useAdvancedWrap: true }, maxLines: 2 })).setLineSpacing(-3);
+      const st = this.add.text(42, CARD_H - 1, status, textStyle({ size: 'small', color: equipped || placed ? THEME.successCss : owned ? THEME.textDim : affordable ? THEME.accentCss : '#8a8a8a' })).setOrigin(0, 1);
       c.add([bg, icon, name, st]);
       c.setSize(CARD_W, CARD_H);
       c.setInteractive(new Phaser.Geom.Rectangle(CARD_W / 2, CARD_H / 2, CARD_W, CARD_H), Phaser.Geom.Rectangle.Contains);

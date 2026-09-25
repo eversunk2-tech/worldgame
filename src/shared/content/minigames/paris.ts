@@ -64,12 +64,13 @@ export const PARIS_MINIGAMES: MinigameContent = {
     },
     {
       id: 'paris_b03', cityId: 'paris', text: '1889년에 세운 [0]은 파리의 상징이다.',
-      blanks: [{ answer: '에펠탑', options: ['에펠탑', '빅벤', '피사의 사탑', '남산타워'] }],
+      blanks: [{ answer: '에펠탑', options: ['에펠탑', '빅벤', '피사의 사탑', '다보탑'] }],
       explanation: '1889년에 세운 에펠탑은 파리의 상징이다.',
     },
     {
       id: 'paris_b04', cityId: 'paris', text: '프랑스에서는 화폐로 [0]를 쓴다.',
-      blanks: [{ answer: '유로', options: ['유로', '달러', '파운드', '원'] }],
+      // 원 → 루피: every option now takes 를, so the particle no longer rules one out (review Stage C L5)
+      blanks: [{ answer: '유로', options: ['유로', '달러', '파운드', '루피'] }],
       explanation: '프랑스에서는 화폐로 유로를 쓴다.',
     },
   ],

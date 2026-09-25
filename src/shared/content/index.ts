@@ -3,10 +3,22 @@ import type { BlankItem, CityDef, CityId, ContentPool, ItemDef, LearnCard, MapTa
 import { MAP_COLS, MAP_ROWS } from '../constants';
 import { SEOUL } from './cities/seoul';
 import { PARIS } from './cities/paris';
+import { CAIRO } from './cities/cairo';
+import { NEWYORK } from './cities/newyork';
+import { SYDNEY } from './cities/sydney';
+import { RIO } from './cities/rio';
 import { SEOUL_QUIZ } from './quizzes/seoul';
 import { PARIS_QUIZ } from './quizzes/paris';
+import { CAIRO_QUIZ } from './quizzes/cairo';
+import { NEWYORK_QUIZ } from './quizzes/newyork';
+import { SYDNEY_QUIZ } from './quizzes/sydney';
+import { RIO_QUIZ } from './quizzes/rio';
 import { SEOUL_MINIGAMES } from './minigames/seoul';
 import { PARIS_MINIGAMES } from './minigames/paris';
+import { CAIRO_MINIGAMES } from './minigames/cairo';
+import { NEWYORK_MINIGAMES } from './minigames/newyork';
+import { SYDNEY_MINIGAMES } from './minigames/sydney';
+import { RIO_MINIGAMES } from './minigames/rio';
 import { CITY_MARKERS } from './continents';
 import { isRegionId } from './regions';
 import { MONSTERS, getMonsterDef } from './monsters';
@@ -18,14 +30,15 @@ export { getItem, ITEMS } from './items';
 export { getMonsterDef, MONSTERS } from './monsters';
 export { CITY_MARKERS, getMarker } from './continents';
 
-export const CITIES: Partial<Record<CityId, CityDef>> = { seoul: SEOUL, paris: PARIS };
-export const PLAYABLE_CITIES: readonly CityDef[] = [SEOUL, PARIS];
+export const CITIES: Partial<Record<CityId, CityDef>> = { seoul: SEOUL, paris: PARIS, cairo: CAIRO, newyork: NEWYORK, sydney: SYDNEY, rio: RIO };
+/** Spec 8.1 order: seoul, paris, cairo, newyork, sydney, rio (also the order of merged unlock logs). */
+export const PLAYABLE_CITIES: readonly CityDef[] = [SEOUL, PARIS, CAIRO, NEWYORK, SYDNEY, RIO];
 export const PLAYABLE_CITY_IDS: readonly CityId[] = PLAYABLE_CITIES.map((c) => c.id);
 export const ALL_MISSIONS: readonly MissionDef[] = PLAYABLE_CITIES.flatMap((c) => c.missions);
 export const ALL_CARDS: readonly LearnCard[] = PLAYABLE_CITIES.flatMap((c) => c.cards);
-export const ALL_QUIZ: readonly QuizItem[] = [...SEOUL_QUIZ, ...PARIS_QUIZ];
-/** Match / map-find / order / blank data per city (spec 7, appendix A). Stage C appends the new cities here. */
-const MINIGAME_CONTENT: readonly MinigameContent[] = [SEOUL_MINIGAMES, PARIS_MINIGAMES];
+export const ALL_QUIZ: readonly QuizItem[] = [...SEOUL_QUIZ, ...PARIS_QUIZ, ...CAIRO_QUIZ, ...NEWYORK_QUIZ, ...SYDNEY_QUIZ, ...RIO_QUIZ];
+/** Match / map-find / order / blank data per city (spec 7, appendix A). */
+const MINIGAME_CONTENT: readonly MinigameContent[] = [SEOUL_MINIGAMES, PARIS_MINIGAMES, CAIRO_MINIGAMES, NEWYORK_MINIGAMES, SYDNEY_MINIGAMES, RIO_MINIGAMES];
 export const ALL_PAIRS: readonly MatchPair[] = MINIGAME_CONTENT.flatMap((c) => c.pairs);
 export const ALL_MAP_TARGETS: readonly MapTarget[] = MINIGAME_CONTENT.flatMap((c) => c.mapTargets);
 export const ALL_ORDERS: readonly OrderItem[] = MINIGAME_CONTENT.flatMap((c) => c.orders);

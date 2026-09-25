@@ -18,7 +18,7 @@ export class TitleScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2;
     this.add.image(cx, GAME_HEIGHT / 2, TEX.worldmap).setAlpha(0.25);
     this.add.text(cx, 96, '세계 도시 여행', outlined({ size: 'big', color: THEME.accentCss, strokeThickness: 6 })).setOrigin(0.5);
-    this.add.text(cx, 150, '2D 학습형 RPG v0.2 — 6대륙의 도시를 탐험하며 지형·기후·문화를 배워요', outlined({ size: 'small', color: THEME.textDim })).setOrigin(0.5);
+    this.add.text(cx, 150, '2D 학습형 RPG v0.2 — 6대륙 6개 도시를 탐험하며 지형·기후·문화를 배워요', outlined({ size: 'small', color: THEME.textDim })).setOrigin(0.5);
 
     const hasSave = session.hasSave();
     let y = 220;

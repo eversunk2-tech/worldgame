@@ -2,7 +2,7 @@
 // furniture/room definitions. Indices were read with tools/tile-index.html; each comment gives sheet (col,row).
 // Sheets: rpg 57×31 (index = col + row*57), city 37×28, indoor 27×18.
 import type { BuildingStyle, CityTheme, RoadStyle, TreeKind } from '../../shared/types';
-import type { RoadVariant, WaterVariant } from '../../shared/map/autotile';
+import { allWaterVariants, isBaseWaterVariant, WATER_CORNERS, type BaseWaterVariant, type RoadVariant, type WaterCorner, type WaterQuad, type WaterVariant } from '../../shared/map/autotile';
 import { BUILDING_PARTS, type BuildingPart } from '../../shared/map/buildings';
 import type Phaser from 'phaser';
 import { ITEMS } from '../../shared/content/items';
@@ -59,7 +59,7 @@ function asphaltSet(): Record<string, TileEntry> {
 
 // ---------------------------------------------------------------- water sets (rpg)
 // Pond block rpg (2..4, 0..2): grass-rimmed water. Names are from the water tile's point of view (edge_n = land N).
-const RIVER: Record<WaterVariant, number> = {
+const RIVER: Record<BaseWaterVariant, number> = {
   fill: 60,     // (3,1)
   edge_n: 3,    // (3,0)
   edge_w: 59,   // (2,1)
@@ -72,7 +72,7 @@ const RIVER: Record<WaterVariant, number> = {
   in_ne: 60, in_nw: 60, in_se: 60, in_sw: 60, // base fill; the corner bands are code-drawn on top (innerCorner)
 };
 // Sea block rpg (10..12, 22..24): cyan water with a sand rim.
-const SEA: Record<WaterVariant, number> = {
+const SEA: Record<BaseWaterVariant, number> = {
   fill: 1322, edge_n: 1265, edge_w: 1321, edge_e: 1323, edge_s: 1379,
   c_nw: 1264, c_ne: 1266, c_sw: 1378, c_se: 1380,
   in_ne: 1322, in_nw: 1322, in_se: 1322, in_sw: 1322,
@@ -82,14 +82,49 @@ const SEA: Record<WaterVariant, number> = {
  * fill plus a code-drawn quarter-circle of the edge tile's shore bands (review Stage A #4). The sea block's land
  * rows are transparent (meant to overlay sand), so sea edges/corners sit on a sand cell.
  */
-function waterSet(prefix: 'water' | 'sea', set: Record<WaterVariant, number>): Record<string, TileEntry> {
+function waterSet(prefix: 'water' | 'sea', set: Record<BaseWaterVariant, number>): Record<string, TileEntry> {
   const out: Record<string, TileEntry> = {};
   const base = (idx: number): TileEntry => (prefix === 'sea' && idx !== set.fill ? layers(rpg(8), rpg(idx)) : rpg(idx));
-  for (const [v, idx] of Object.entries(set) as [WaterVariant, number][]) {
+  for (const [v, idx] of Object.entries(set) as [BaseWaterVariant, number][]) {
     if (v.startsWith('in_')) out[`${prefix}_${v}`] = layers(rpg(set.fill), { code: `${prefix}_${v}` });
     else out[v === 'fill' ? prefix : `${prefix}_${v}`] = base(idx);
   }
   return out;
+}
+
+/**
+ * Water shapes the sheets lack — 1-wide channels (ch_h / ch_v), channel ends, lone pools and edge/corner + inner
+ * corner mixes (autotile `waterVariant`). Each quadrant is copied from the base cell of the same theme whose shore
+ * matches that quadrant (e.g. ch_h = top half of edge_n + bottom half of edge_s), so bands line up with neighbours.
+ */
+const WATER_COMPOSITES = allWaterVariants().filter((v) => !isBaseWaterVariant(v.variant));
+
+/** Base frame name that provides quadrant `kind` at `corner` (fill, shore side, outer or inner corner). */
+function waterQuadSource(prefix: 'water' | 'sea', kind: WaterQuad, corner: WaterCorner): string {
+  switch (kind) {
+    case 'f': return prefix;
+    case 'c': return `${prefix}_c_${corner}`;
+    case 'i': return `${prefix}_in_${corner}`;
+    default: return `${prefix}_edge_${kind}`;
+  }
+}
+
+function waterCompositeNames(prefix: 'water' | 'sea'): Record<string, TileEntry> {
+  return Object.fromEntries(WATER_COMPOSITES.map(({ variant }) => [`${prefix}_${variant}`, code(`${prefix}_${variant}`)]));
+}
+
+function waterCompositeDrawers(prefix: 'water' | 'sea'): Record<string, CodeDrawer> {
+  const drawer = (quads: readonly WaterQuad[]): CodeDrawer => (ctx) => {
+    WATER_CORNERS.forEach((corner, i) => {
+      const name = waterQuadSource(prefix, quads[i]!, corner);
+      const entry = TILE_NAMES[name];
+      const cell = (entry && resolveEntry(entry, CODE_TILES)) ?? fallbackCell(name);
+      const ox = corner.endsWith('e') ? 8 : 0;
+      const oy = corner.startsWith('s') ? 8 : 0;
+      ctx.drawImage(cell, ox, oy, 8, 8, ox, oy, 8, 8);
+    });
+  };
+  return Object.fromEntries(WATER_COMPOSITES.map(({ variant, quads }) => [`${prefix}_${variant}`, drawer(quads)]));
 }
 
 // ---------------------------------------------------------------- buildings
@@ -218,6 +253,8 @@ export const TILE_NAMES: Record<string, TileEntry> = {
   ...waterSet('water', RIVER),
   water_2: rpg(1),                                // (1,0) water with different sparkles
   ...waterSet('sea', SEA),
+  ...waterCompositeNames('water'),                // channels etc., stitched from the cells above (see WATER_COMPOSITES)
+  ...waterCompositeNames('sea'),
   bridge_h: rpg(1006),                            // (37,17) horizontal planks with side rails
   bridge_v: rpg(1063),                            // (37,18) vertical planks with side rails
   // 자연
@@ -414,6 +451,8 @@ export const CODE_TILES: Record<string, CodeDrawer> = {
   plank_lines: drawPlankLines,
   water_in_ne: innerCorner(3, 5, 'ne'), water_in_nw: innerCorner(3, 5, 'nw'), water_in_se: innerCorner(3, 5, 'se'), water_in_sw: innerCorner(3, 5, 'sw'),
   sea_in_ne: innerCorner(1265, 8, 'ne'), sea_in_nw: innerCorner(1265, 8, 'nw'), sea_in_se: innerCorner(1265, 8, 'se'), sea_in_sw: innerCorner(1265, 8, 'sw'),
+  ...waterCompositeDrawers('water'),
+  ...waterCompositeDrawers('sea'),
   entrance_mark: drawEntranceMark,
   souvenir_seoul: drawSouvenir('souvenir_seoul'),
   souvenir_paris: drawSouvenir('souvenir_paris'),

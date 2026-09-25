@@ -1,9 +1,10 @@
-// Avatar cosmetics + furniture catalogue (spec 6.6). `shape` drives placeholder drawing.
+// Avatar cosmetics + furniture catalogue (spec 8.4: 31 items). `shape` drives placeholder drawing.
 import type { ItemDef, ItemSlot } from '../types';
 
 export const ITEMS: readonly ItemDef[] = [
   { id: 'body_light', slot: 'body', name: '밝은 피부', price: 0, color: 0xffe0bd, shape: 'body', default: true },
   { id: 'body_tan', slot: 'body', name: '건강한 피부', price: 0, color: 0xd9a066, shape: 'body' },
+  { id: 'body_dark', slot: 'body', name: '짙은 피부', price: 0, color: 0x8d5a3b, shape: 'body' }, // v0.2: free starter (spec 8.4)
 
   { id: 'hair_short_black', slot: 'hair', name: '짧은 검정 머리', price: 0, color: 0x222222, shape: 'short', default: true },
   { id: 'hair_long_brown', slot: 'hair', name: '긴 갈색 머리', price: 25, color: 0x6d4c2f, shape: 'long' },
@@ -14,11 +15,15 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'top_hoodie_green', slot: 'top', name: '초록 후드티', price: 30, color: 0x3fa34d, shape: 'hoodie' },
   { id: 'top_hanbok', slot: 'top', name: '한복', price: 40, color: 0xe63e62, shape: 'hanbok' },
   { id: 'top_mariniere', slot: 'top', name: '마리니에르(프랑스 줄무늬 셔츠)', price: 40, color: 0x1f3c88, shape: 'stripes' },
+  { id: 'top_brazil', slot: 'top', name: '브라질 축구 유니폼', price: 40, color: 0xf9d342, shape: 'brazil' }, // 리우
 
   { id: 'hat_cap_red', slot: 'hat', name: '빨간 야구 모자', price: 30, color: 0xd62828, shape: 'cap' },
   { id: 'hat_gat', slot: 'hat', name: '갓', price: 40, color: 0x1a1a1a, shape: 'gat' },
   { id: 'hat_beret', slot: 'hat', name: '베레모', price: 40, color: 0x5a6fa8, shape: 'beret' }, // v0.2 review: lighter navy so it reads against dark hair/backgrounds
   { id: 'hat_crown', slot: 'hat', name: '황금 왕관', price: 60, color: 0xffc300, shape: 'crown' },
+  { id: 'hat_pharaoh', slot: 'hat', name: '파라오 머리 장식', price: 45, color: 0x2a6fd6, shape: 'pharaoh' }, // 카이로
+  { id: 'hat_liberty', slot: 'hat', name: '자유의 여신상 왕관', price: 45, color: 0x7fc8a9, shape: 'liberty' }, // 뉴욕
+  { id: 'hat_cork', slot: 'hat', name: '코르크 모자', price: 40, color: 0xb08850, shape: 'cork' }, // 시드니
 
   { id: 'fur_chair', slot: 'furniture', name: '의자', price: 20, color: 0xb5651d, shape: 'chair', size: { w: 1, h: 1 } },
   { id: 'fur_plant', slot: 'furniture', name: '화분', price: 20, color: 0x4caf50, shape: 'plant', size: { w: 1, h: 1 } },
@@ -28,6 +33,10 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'fur_bed', slot: 'furniture', name: '침대', price: 60, color: 0x64b5f6, shape: 'bed', size: { w: 2, h: 1 } },
   { id: 'fur_souvenir_seoul', slot: 'furniture', name: '남산타워 모형', price: 0, color: 0xeeeeee, shape: 'tower', size: { w: 1, h: 1 }, unlockStamp: 'seoul' },
   { id: 'fur_souvenir_paris', slot: 'furniture', name: '에펠탑 모형', price: 0, color: 0x8d6e63, shape: 'eiffel', size: { w: 1, h: 1 }, unlockStamp: 'paris' },
+  { id: 'fur_souvenir_cairo', slot: 'furniture', name: '피라미드 모형', price: 0, color: 0xe0c080, shape: 'pyramid', size: { w: 1, h: 1 }, unlockStamp: 'cairo' },
+  { id: 'fur_souvenir_newyork', slot: 'furniture', name: '자유의 여신상 모형', price: 0, color: 0x7fc8a9, shape: 'liberty_statue', size: { w: 1, h: 1 }, unlockStamp: 'newyork' },
+  { id: 'fur_souvenir_sydney', slot: 'furniture', name: '오페라 하우스 모형', price: 0, color: 0xf4f4f4, shape: 'opera', size: { w: 1, h: 1 }, unlockStamp: 'sydney' },
+  { id: 'fur_souvenir_rio', slot: 'furniture', name: '예수상 모형', price: 0, color: 0xf0f0f0, shape: 'christ', size: { w: 1, h: 1 }, unlockStamp: 'rio' },
 ];
 
 const BY_ID: Record<string, ItemDef> = Object.fromEntries(ITEMS.map((i) => [i.id, i]));

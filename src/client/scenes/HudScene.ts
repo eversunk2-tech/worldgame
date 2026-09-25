@@ -260,7 +260,7 @@ export class HudScene extends Phaser.Scene {
     this.layoutLogs();
   }
 
-  /** One line for every city opened in the same frame: "파리·카이로·뉴욕·시드니·리우가 열렸어요!" */
+  /** One line for every city opened in the same frame: "파리·카이로·뉴욕·시드니·리우데자네이루가 열렸어요!" */
   private flushUnlocks(): void {
     const names = this.pendingUnlocks;
     this.pendingUnlocks = [];

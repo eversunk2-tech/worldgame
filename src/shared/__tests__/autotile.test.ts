@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  bridgeVariant, crosswalkVariant, fenceVariant, groundVariant, hash, N, E, S, W, NE, NW, SE, SW, RN, RE, RS, RW,
-  roadMask, roadVariant, rockVariant, variant, waterMask, waterVariant,
+  allWaterVariants, bridgeVariant, crosswalkVariant, fenceVariant, groundVariant, hash, isBaseWaterVariant, N, E, S, W, NE, NW, SE, SW, RN, RE, RS, RW,
+  roadMask, roadVariant, rockVariant, variant, WATER_SHAPES, waterMask, waterQuads, waterVariant,
 } from '../map/autotile';
+import { getCity, PLAYABLE_CITIES } from '../content';
 
 describe('hash / variant', () => {
   it('is deterministic and spreads values', () => {
@@ -62,9 +63,70 @@ describe('water autotile', () => {
     expect(waterVariant(waterMask(river, 1, 1))).toBe('edge_n');
     expect(waterVariant(waterMask(river, 3, 2))).toBe('edge_s');
   });
-  it('degenerate 1-wide channels fall back to an edge', () => {
-    const channel = ['...', '~~~', '...'];
-    expect(waterVariant(waterMask(channel, 1, 1))).toBe('edge_n');
+  it('1-wide channels keep a shore band on both banks (ch_h / ch_v)', () => {
+    expect(waterVariant(waterMask(['...', '~~~', '...'], 1, 1))).toBe('ch_h');
+    expect(waterQuads(waterMask(['...', '~~~', '...'], 1, 1))).toEqual(['n', 'n', 's', 's']);
+    expect(waterVariant(waterMask(['.~.', '.~.', '.~.'], 1, 1))).toBe('ch_v');
+    expect(waterQuads(waterMask(['.~.', '.~.', '.~.'], 1, 1))).toEqual(['w', 'e', 'w', 'e']);
+    // bridges count as water, so a channel under a bridge row stays a channel
+    expect(waterVariant(waterMask(['.....', '~~B~~', '.....'], 1, 1))).toBe('ch_h');
+  });
+
+  it('channel ends, lone pools and channel mouths (edge + inner corner)', () => {
+    expect(waterVariant(waterMask(['...', '.~~', '...'], 1, 1))).toBe('ch_end_w'); // land N, S, W; water continues E
+    expect(waterVariant(waterMask(['...', '~~.', '...'], 1, 1))).toBe('ch_end_e');
+    expect(waterVariant(waterMask(['...', '.~.', '.~.'], 1, 1))).toBe('ch_end_n');
+    expect(waterVariant(waterMask(['.~.', '.~.', '...'], 1, 1))).toBe('ch_end_s');
+    expect(waterVariant(waterMask(['...', '.~.', '...'], 1, 1))).toBe('lone');
+    // channels between the banks (rows 0 and 4) and an island (row 2, x ≥ 2) meet open water on the left
+    const mouth = ['.....', '~~~~~', '~~...', '~~~~~', '.....'];
+    expect(waterVariant(waterMask(mouth, 2, 1))).toBe('ch_h');
+    expect(waterVariant(waterMask(mouth, 1, 1))).toBe('q_nnfi'); // north shore + the island's corner at SE
+    expect(waterVariant(waterMask(mouth, 1, 3))).toBe('q_fiss'); // south shore + the island's corner at NE
+    // outer corner with the opposite diagonal also land (a channel bend)
+    expect(waterVariant(waterMask(['...', '.~~', '.~.'], 1, 1))).toBe('q_cnwi');
+  });
+
+  it('every mask maps to one of the 47 blob shapes; named shapes keep their quadrant codes', () => {
+    const all = allWaterVariants();
+    expect(all).toHaveLength(47);
+    expect(new Set(all.map((v) => v.variant)).size).toBe(47);
+    for (const { variant, quads } of all) {
+      const named = WATER_SHAPES[quads.join('')];
+      expect(variant).toBe(named ?? `q_${quads.join('')}`);
+    }
+    const base = all.filter((v) => isBaseWaterVariant(v.variant)).map((v) => v.variant).sort();
+    expect(base).toEqual(['c_ne', 'c_nw', 'c_se', 'c_sw', 'edge_e', 'edge_n', 'edge_s', 'edge_w', 'fill', 'in_ne', 'in_nw', 'in_se', 'in_sw']);
+    for (let m = 0; m < 256; m++) expect(all.some((v) => v.variant === waterVariant(m))).toBe(true);
+  });
+
+  it("Paris: the 16 channel tiles around the Île de la Cité get both banks, the 4 channel mouths an inner corner", () => {
+    const rows = getCity('paris').rows;
+    const shapes = new Map<string, string[]>();
+    for (let y = 0; y < rows.length; y++) for (let x = 0; x < rows[y]!.length; x++) {
+      if (rows[y]![x] !== '~') continue;
+      const v = waterVariant(waterMask(rows, x, y));
+      if (!isBaseWaterVariant(v)) shapes.set(v, [...(shapes.get(v) ?? []), `${x},${y}`]);
+    }
+    expect(shapes.get('ch_h')).toHaveLength(16);
+    expect(shapes.get('ch_h')).toEqual(expect.arrayContaining(['14,15', '15,15', '18,15', '19,15', '22,15', '25,15', '14,18', '25,18']));
+    expect([...shapes.keys()].sort()).toEqual(['ch_h', 'q_fiss', 'q_ifss', 'q_nnfi', 'q_nnif']);
+    // New York: the 1-wide water row between Manhattan and Liberty Island (review Stage C M4) is a channel with two
+    // mouths; the other four maps use only the sheet's own cells
+    const composites = (rows: readonly string[]) => {
+      const out: string[] = [];
+      for (let y = 0; y < 30; y++) for (let x = 0; x < 40; x++) {
+        if (rows[y]![x] !== '~') continue;
+        const v = waterVariant(waterMask(rows, x, y));
+        if (!isBaseWaterVariant(v)) out.push(`${v}@${x},${y}`);
+      }
+      return out;
+    };
+    expect(composites(getCity('newyork').rows)).toEqual(['q_nnfi@3,26', 'ch_h@4,26', 'ch_h@5,26', 'ch_h@6,26', 'ch_h@7,26', 'q_nnif@8,26']);
+    for (const city of PLAYABLE_CITIES) {
+      if (city.id === 'paris' || city.id === 'newyork') continue;
+      expect([city.id, composites(city.rows)]).toEqual([city.id, []]);
+    }
   });
 });
 

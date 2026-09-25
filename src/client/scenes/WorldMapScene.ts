@@ -1,5 +1,6 @@
 // World map hub: labels, city markers, tooltips, lock states, keyboard navigation (spec 5.8). v0.2: world-atlas
-// texture, pixel pins, Galmuri labels, BGM, speaker button.
+// texture, pixel pins, Galmuri labels, BGM, speaker button; Stage C: six playable cities (rule A unlock hint),
+// position (북위/남위·동경/서경) and Seoul distance in every tooltip, ←/→ walk the markers west → east.
 import Phaser from 'phaser';
 import type { CityMarker } from '../../shared/types';
 import { CITY_MARKERS, CONTINENT_LABELS, CONTINENT_NAMES, OCEAN_LABELS, distanceKm, getMarker, lonLatToXY } from '../../shared/content/continents';
@@ -75,7 +76,8 @@ export class WorldMapScene extends Phaser.Scene {
     }
 
     const layout = layoutMarkers(CITY_MARKERS);
-    this.views = CITY_MARKERS.map((marker, i) => this.createMarker(marker, layout[i]!));
+    // ←/→ step through the markers in screen order (west → east) so the arrows follow the map
+    this.views = CITY_MARKERS.map((marker, i) => this.createMarker(marker, layout[i]!)).sort((a, b) => a.x - b.x);
     const last = session.lastCity;
     this.selected = Math.max(0, this.views.findIndex((v) => v.marker.cityId === (last ?? 'seoul')));
 
@@ -95,7 +97,7 @@ export class WorldMapScene extends Phaser.Scene {
     this.add.text(16, 12, '세계지도', titleStyle({ stroke: '#000000', strokeThickness: 4 }));
 
     new Button(this, GAME_WIDTH - 176, GAME_HEIGHT - 56, '아바타 룸 (R)', { width: 160, height: 40, onClick: () => this.goRoom() });
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 18, '도시를 클릭하거나 ←/→ 로 고르고 Enter 로 입장 · 서울·파리만 여행할 수 있어요 (나머지는 준비 중)', outlined({ size: 'small', color: THEME.textDim })).setOrigin(0.5);
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 18, `도시를 클릭하거나 ←/→ 로 고르고 Enter 로 입장 · ${this.guideText()}`, outlined({ size: 'small', color: THEME.textDim })).setOrigin(0.5);
 
     const K = Phaser.Input.Keyboard.KeyCodes;
     const kb = this.input.keyboard!;
@@ -173,18 +175,26 @@ export class WorldMapScene extends Phaser.Scene {
     if (v && showTip) this.showTooltip(v);
   }
 
+  /** Bottom guide line (spec 8.2): the unlock rule while cities are still locked, free travel afterwards. */
+  private guideText(): string {
+    const locked = CITY_MARKERS.some((m) => cityState(session.progress, m) === 'locked');
+    return locked ? '서울 퀴즈 2개를 풀면 5개 도시가 모두 열려요' : '6대륙 6개 도시를 자유롭게 여행해요 (베이징·런던·나이로비는 준비 중)';
+  }
+
   private tooltipLines(view: MarkerView): string {
     const m = view.marker;
     const state = cityState(session.progress, m);
     const lines = [`${m.name} (${m.country}) · ${CONTINENT_NAMES[m.continent]}`, `상태: ${STATE_TEXT[state]}`];
+    // position as elementary social studies writes it — 북위/남위, 동경/서경, no negative numbers (review Stage C L6)
+    const [lon, lat] = m.lonLat;
+    lines.push(`${lat >= 0 ? '북위' : '남위'} ${Math.abs(lat).toFixed(1)}° · ${lon >= 0 ? '동경' : '서경'} ${Math.abs(lon).toFixed(1)}°`);
+    if (m.cityId !== 'seoul') {
+      // great-circle distance from Seoul, rounded to 10 km (spec 12.2-C: 카이로 약 8,490km …)
+      const km = Math.round(distanceKm(getMarker('seoul').lonLat, m.lonLat) / 10) * 10;
+      lines.push(`서울에서 약 ${km.toLocaleString()}km`);
+    }
     if (state === 'locked') {
       lines.push(unlockHint(m));
-      const seoul = getMarker('seoul');
-      const dLat = m.lonLat[1] - seoul.lonLat[1];
-      const dLon = m.lonLat[0] - seoul.lonLat[0];
-      const km = Math.round(distanceKm(seoul.lonLat, m.lonLat) / 10) * 10;
-      const fmt = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}°`;
-      lines.push(`서울에서 위도 ${fmt(dLat)}, 경도 ${fmt(dLon)} · 약 ${km.toLocaleString()}km`);
     } else if (state === 'comingSoon') {
       lines.push('다음 업데이트에서 열려요');
     } else if (state === 'stamped') {
