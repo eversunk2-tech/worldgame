@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Progress, QuizItem } from '../types';
-import { quizPool } from '../content';
+import { minigamePool } from '../content';
 import { getMinigameLogic } from '../logic/minigame/registry';
+import type { QuizLikeLogic } from '../logic/minigame/types';
+import type { MatchState } from '../logic/minigame/match';
+import { answerOf, type MapFindState } from '../logic/minigame/mapfind';
+import type { BlankState } from '../logic/minigame/blank';
+import { correctArrangement, type OrderState } from '../logic/minigame/order';
 import { createProgress } from '../logic/progress';
 import { applyAction, type ProgressEvent } from '../logic/reducer';
 import { cityState } from '../logic/unlock';
@@ -9,14 +14,14 @@ import { getMarker } from '../content/continents';
 import { fromSave, toSave, validate } from '../save/schema';
 
 function playQuiz(p: Progress, missionId: string, kind: 'quiz' | 'ox', correctCount: number): ProgressEvent[] {
-  const logic = getMinigameLogic(kind);
-  const s = logic.create({ kind, cityId: 'seoul', count: 5, passCount: 4 }, quizPool('seoul'), 5);
+  const logic = getMinigameLogic(kind) as QuizLikeLogic<unknown>;
+  const s = logic.create({ kind, cityId: 'seoul', count: 5, passCount: 4 }, minigamePool('seoul'), 5);
   let n = 0;
   while (!logic.isDone(s)) {
     const item = logic.current(s) as QuizItem;
     const right = n < correctCount;
-    if (item.kind === 'choice') logic.answer(s, right ? item.answer : (item.answer + 1) % 4);
-    else logic.answer(s, right ? item.answer : !item.answer);
+    if (item.kind === 'choice') logic.act(s, right ? item.answer : (item.answer + 1) % 4);
+    else logic.act(s, right ? item.answer : !item.answer);
     n++;
   }
   return applyAction(p, { type: 'mission.minigameResult', missionId, result: logic.result(s) });
@@ -47,13 +52,15 @@ describe('reducer scenario', () => {
     expect(win).toEqual([
       { type: 'mission.changed', missionId: 'm_seoul_quiz', status: 'turnedIn', count: 4 },
       { type: 'points.changed', delta: 40, points: 45, reason: 'mission:m_seoul_quiz' },
+      { type: 'mission.changed', missionId: 'm_seoul_match', status: 'available', count: 0 }, // follow-up (spec 8.3)
     ]);
     expect(p.missions.m_seoul_quiz!.attempts).toBe(2);
 
     // ox mission → paris unlocks
     applyAction(p, { type: 'mission.accept', missionId: 'm_seoul_ox' });
     const ox = playQuiz(p, 'm_seoul_ox', 'ox', 5);
-    expect(ox.map((e) => e.type)).toEqual(['mission.changed', 'points.changed', 'city.unlocked']);
+    expect(ox.map((e) => e.type)).toEqual(['mission.changed', 'points.changed', 'mission.changed', 'city.unlocked']);
+    expect(ox[2]).toEqual({ type: 'mission.changed', missionId: 'm_seoul_map', status: 'available', count: 0 });
     expect(ox.at(-1)).toEqual({ type: 'city.unlocked', cityId: 'paris' });
     expect(p.points).toBe(75);
     expect(cityState(p, getMarker('paris'))).toBe('open');
@@ -116,6 +123,81 @@ describe('reducer scenario', () => {
     expect(restored).not.toBeNull();
     expect(fromSave(restored!)).toEqual(p);
     expect(restored!.savedAt).toBe(999);
+  });
+
+  it('follow-up minigames through the reducer: match ★ bonus, mapfind, blank, order; stats.minigames', () => {
+    const p = createProgress('테스터', 1);
+    for (const id of ['m_seoul_quiz', 'm_seoul_ox', 'm_paris_quiz', 'm_paris_ox']) p.missions[id]!.status = 'turnedIn';
+    // an older save kept the follow-ups locked → entering a city opens them
+    expect(applyAction(p, { type: 'city.enter', cityId: 'seoul' }).map((e) => e.type === 'mission.changed' && e.missionId)).toEqual(['m_seoul_match', 'm_seoul_map', 'm_paris_blank', 'm_paris_order']);
+    expect(applyAction(p, { type: 'city.enter', cityId: 'paris' })).toEqual([]);
+
+    // match: perfect memory → 6 attempts → 3★ → 30 + 10
+    applyAction(p, { type: 'mission.accept', missionId: 'm_seoul_match' });
+    const match = getMinigameLogic('match');
+    const ms = match.create({ kind: 'match', cityId: 'seoul', pairs: 6, maxAttempts: 14 }, minigamePool('seoul'), 99) as MatchState;
+    for (const pairId of new Set(ms.cards.map((c) => c.pairId))) {
+      ms.cards.forEach((c, i) => { if (c.pairId === pairId) match.act(ms, { type: 'flip', index: i }); });
+    }
+    const mr = match.result(ms);
+    expect(mr).toMatchObject({ success: true, stars: 3 });
+    const matchEv = applyAction(p, { type: 'mission.minigameResult', missionId: 'm_seoul_match', result: mr });
+    expect(matchEv.filter((e) => e.type === 'points.changed').map((e) => e.type === 'points.changed' && e.delta)).toEqual([30, 10]);
+    expect(p.points).toBe(40);
+
+    // mapfind: click every marker/region centre
+    applyAction(p, { type: 'mission.accept', missionId: 'm_seoul_map' });
+    const map = getMinigameLogic('mapfind');
+    const fs = map.create({ kind: 'mapfind', cityId: 'seoul', count: 5, passCount: 4 }, minigamePool('seoul'), 5) as MapFindState;
+    const inside: Record<string, [number, number]> = { asia: [95, 45], europe: [20, 55], pacific: [-150, 0] };
+    for (const t of fs.targets) {
+      const a = answerOf(t);
+      const [lon, lat] = a.type === 'city' ? a.lonLat : inside[a.regionId]!;
+      map.act(fs, { lon, lat });
+    }
+    applyAction(p, { type: 'mission.minigameResult', missionId: 'm_seoul_map', result: map.result(fs) });
+    expect(p.missions.m_seoul_map!.status).toBe('turnedIn');
+
+    // blank: 3/4 right passes
+    applyAction(p, { type: 'mission.accept', missionId: 'm_paris_blank' });
+    const blank = getMinigameLogic('blank');
+    const bs = blank.create({ kind: 'blank', cityId: 'paris', count: 4, passCount: 3 }, minigamePool('paris'), 6) as BlankState;
+    let n = 0;
+    while (!blank.isDone(bs)) {
+      const q = bs.questions[bs.index]!;
+      q.slots.forEach((slot, i) => blank.act(bs, { type: 'choose', blank: i, option: n === 1 ? (slot.answer + 1) % 4 : slot.answer }));
+      blank.act(bs, { type: 'submit' });
+      n++;
+    }
+    applyAction(p, { type: 'mission.minigameResult', missionId: 'm_paris_blank', result: blank.result(bs) });
+    expect(p.missions.m_paris_blank!.status).toBe('turnedIn');
+
+    // order: one question revealed → 1/2 → fail, then a clean retry passes
+    applyAction(p, { type: 'mission.accept', missionId: 'm_paris_order' });
+    const order = getMinigameLogic('order');
+    const spec = { kind: 'order', cityId: 'paris', count: 2, passCount: 2, triesPerQuestion: 2 } as const;
+    const lose = order.create(spec, minigamePool('paris'), 8) as OrderState;
+    order.act(lose, { type: 'submit' });
+    order.act(lose, { type: 'submit' });
+    const solve = (s: OrderState) => {
+      while (!order.isDone(s)) {
+        const q = s.questions[s.index]!;
+        q.arrangement.splice(0, q.arrangement.length, ...correctArrangement(q.item));
+        order.act(s, { type: 'submit' });
+      }
+    };
+    solve(lose);
+    expect(applyAction(p, { type: 'mission.minigameResult', missionId: 'm_paris_order', result: order.result(lose) })).toEqual([
+      { type: 'mission.changed', missionId: 'm_paris_order', status: 'active', count: 0 },
+    ]);
+    const win = order.create(spec, minigamePool('paris'), 9) as OrderState;
+    solve(win);
+    applyAction(p, { type: 'mission.minigameResult', missionId: 'm_paris_order', result: order.result(win) });
+    expect(p.missions.m_paris_order).toMatchObject({ status: 'turnedIn', attempts: 2 });
+
+    expect(p.points).toBe(40 + 30 + 30 + 30);
+    expect(p.stats).toEqual({ defeated: 0, quizAnswered: 0, quizCorrect: 0, minigames: 4 });
+    expect(p.stamps).toEqual([]); // follow-ups are bonus missions, not stamp missions
   });
 
   it('never mutates on rejected actions', () => {

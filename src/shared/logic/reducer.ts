@@ -5,7 +5,7 @@ import { getCard, getMonster, MONSTERS } from '../content';
 import { getItem } from '../content/items';
 import type { Action, ProgressEvent } from './events';
 import { earnPoints, spendPoints } from './points';
-import { acceptMission, applyMinigameResult, countDefeat, turnInMission } from './missions';
+import { acceptMission, applyMinigameResult, countDefeat, turnInMission, unlockSatisfied } from './missions';
 import { canEnterCity, recheck, unlockedSnapshot } from './unlock';
 import { canBuy, canEquip, canPlace } from './inventory';
 import { isValidName, normalizeName } from './progress';
@@ -27,6 +27,8 @@ export function applyAction(progress: Progress, action: Action): ProgressEvent[]
     case 'city.enter': {
       if (!canEnterCity(progress, action.cityId)) return reject('아직 열리지 않은 도시예요');
       progress.lastCity = action.cityId;
+      // follow-up missions added after their prerequisite was turned in (older saves) open here
+      unlockSatisfied(progress, events);
       return events;
     }
     case 'mission.accept': {

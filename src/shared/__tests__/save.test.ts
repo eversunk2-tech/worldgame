@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ALL_MISSIONS } from '../content';
 import { createProgress } from '../logic/progress';
 import { applyAction } from '../logic/reducer';
 import { LEGACY_KEYS, SAVE_KEY, SAVE_VERSION, fromSave, migrate, toSave, validate } from '../save/schema';
@@ -61,7 +62,7 @@ describe('save schema v3', () => {
     expect(p.room).toEqual([{ itemId: 'fur_plant', gx: 0, gy: 0 }, { itemId: 'fur_souvenir_seoul', gx: 3, gy: 2 }]);
     expect(p.lastCity).toBe('paris');
     expect(p.missions.m_paris_ox).toMatchObject({ status: 'active' });
-    expect(Object.keys(p.missions)).toHaveLength(6);
+    expect(Object.keys(p.missions)).toHaveLength(ALL_MISSIONS.length); // every mission of the content gets a row
     // re-saving writes version 3
     expect(toSave(p).version).toBe(3);
   });

@@ -1,5 +1,6 @@
-// Mission state transitions and NPC interaction decision (spec 6.3). Inherits the 4-step logic from the 3D questSim.
+// Mission state transitions and NPC interaction decision (spec 6.3, 7.0). Inherits the 4-step logic from the 3D questSim.
 import type { CityId, MinigameResult, MinigameSpec, MissionDef, NpcDef, Progress } from '../types';
+import { STAR_BONUS } from '../constants';
 import { ALL_MISSIONS, getMission } from '../content';
 import type { ProgressEvent } from './events';
 import { earnPoints } from './points';
@@ -36,6 +37,22 @@ export function decideNpcInteraction(progress: Progress, npc: NpcDef, _cityId: C
   return { kind: 'talk', text: npc.idleText };
 }
 
+/**
+ * Open every locked mission whose prerequisite is already turned in. Normally unlockDependents does this at turn-in;
+ * this catches missions added by a content update after their prerequisite was done (v0.1 saves meeting the v0.2
+ * follow-up missions). Idempotent; emits mission.changed for each mission it opens.
+ */
+export function unlockSatisfied(progress: Progress, events: ProgressEvent[]): void {
+  for (const m of ALL_MISSIONS) {
+    if (!m.prerequisiteMissionId) continue;
+    const prog = progress.missions[m.id];
+    if (!prog || prog.status !== 'locked') continue;
+    if (progress.missions[m.prerequisiteMissionId]?.status !== 'turnedIn') continue;
+    prog.status = 'available';
+    events.push({ type: 'mission.changed', missionId: m.id, status: 'available', count: prog.count });
+  }
+}
+
 export function unlockDependents(progress: Progress, turnedInId: string, events: ProgressEvent[]): void {
   for (const m of ALL_MISSIONS) {
     if (m.prerequisiteMissionId !== turnedInId) continue;
@@ -58,11 +75,23 @@ export function acceptMission(progress: Progress, missionId: string, events: Pro
   return true;
 }
 
-function completeAndReward(progress: Progress, def: MissionDef, events: ProgressEvent[]): void {
+/** Accept only real star counts from a result (anything else counts as no stars). */
+export function resultStars(result: MinigameResult): 1 | 2 | 3 | undefined {
+  return result.stars === 1 || result.stars === 2 || result.stars === 3 ? result.stars : undefined;
+}
+
+/** Star bonus paid on top of rewardPoints (spec 7.0): STAR_BONUS[stars ?? 1] → 0 / 5 / 10. */
+export function starBonus(stars: 1 | 2 | 3 | undefined): number {
+  return STAR_BONUS[stars ?? 1];
+}
+
+function completeAndReward(progress: Progress, def: MissionDef, events: ProgressEvent[], stars?: 1 | 2 | 3): void {
   const prog = progress.missions[def.id]!;
   prog.status = 'turnedIn';
   events.push({ type: 'mission.changed', missionId: def.id, status: 'turnedIn', count: prog.count });
   earnPoints(progress, def.rewardPoints, `mission:${def.id}`, events);
+  // separate event so the HUD can show the bonus on its own line (earnPoints skips a 0 bonus)
+  earnPoints(progress, starBonus(stars), `stars:${def.id}:${stars ?? 1}`, events);
   unlockDependents(progress, def.id, events);
 }
 
@@ -83,12 +112,16 @@ export function applyMinigameResult(progress: Progress, missionId: string, resul
   if (prog.status !== 'active') { events.push({ type: 'rejected', action: 'mission.minigameResult', reason: `진행 중이 아님(${prog.status})` }); return false; }
   if (result.kind !== def.objective.spec.kind) { events.push({ type: 'rejected', action: 'mission.minigameResult', reason: '미니게임 종류 불일치' }); return false; }
 
-  progress.stats.quizAnswered += Math.max(0, result.total);
-  progress.stats.quizCorrect += Math.max(0, Math.min(result.correct, result.total));
+  // quiz statistics count 4-choice / OX answers only (spec 7.0)
+  if (result.kind === 'quiz' || result.kind === 'ox') {
+    progress.stats.quizAnswered += Math.max(0, result.total);
+    progress.stats.quizCorrect += Math.max(0, Math.min(result.correct, result.total));
+  }
   prog.attempts += 1;
   if (result.success) {
     prog.count = result.correct;
-    completeAndReward(progress, def, events);
+    progress.stats.minigames += 1; // minigames cleared
+    completeAndReward(progress, def, events, resultStars(result));
   } else {
     events.push({ type: 'mission.changed', missionId, status: 'active', count: prog.count });
   }

@@ -1,12 +1,12 @@
 // OX quiz session: seeded item selection, scoring, pass check.
-import type { MinigameResult, MinigameSpec, QuizItem } from '../../types';
+import type { MinigameResult, QuizItem } from '../../types';
 import { mulberry32 } from '../../rng';
-import type { AnswerFeedback, MinigameLogic } from './types';
+import { wrongSpec, type ActFeedback, type QuizLikeLogic, type QuizSpec } from './types';
 
 export type OxItem = Extract<QuizItem, { kind: 'ox' }>;
 
 export interface OxState {
-  spec: MinigameSpec;
+  spec: QuizSpec;
   items: OxItem[];
   index: number;
   correct: number;
@@ -14,7 +14,7 @@ export interface OxState {
   passCount: number;
 }
 
-export function selectOxItems(spec: MinigameSpec, pool: QuizItem[], seed: number): OxItem[] {
+export function selectOxItems(spec: QuizSpec, pool: readonly QuizItem[], seed: number): OxItem[] {
   const rng = mulberry32(seed);
   const filtered = pool.filter(
     (q): q is OxItem => q.kind === 'ox' && q.cityId === spec.cityId && (!spec.topics || spec.topics.includes(q.topic)),
@@ -22,16 +22,17 @@ export function selectOxItems(spec: MinigameSpec, pool: QuizItem[], seed: number
   return rng.shuffle(filtered).slice(0, spec.count);
 }
 
-export const oxLogic: MinigameLogic<OxState> = {
+export const oxLogic: QuizLikeLogic<OxState> = {
   kind: 'ox',
   create(spec, pool, seed) {
-    const items = selectOxItems(spec, pool, seed);
+    if (spec.kind !== 'ox') throw wrongSpec('ox', spec);
+    const items = selectOxItems(spec, pool.quiz, seed);
     return { spec, items, index: 0, correct: 0, answeredIds: [], passCount: Math.min(spec.passCount, items.length) };
   },
   current(s) {
     return s.items[s.index] ?? null;
   },
-  answer(s, choice): AnswerFeedback {
+  act(s, choice): ActFeedback {
     const item = s.items[s.index];
     if (!item) return { correct: false, explanation: '' };
     const correct = typeof choice === 'boolean' && choice === item.answer;

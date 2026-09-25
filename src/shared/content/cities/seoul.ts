@@ -1,6 +1,6 @@
 // Seoul city content (v0.2 spec A.1). Map rows are 30 × 40 chars, legend in content/tiles.ts (27 kinds).
 import type { CityDef } from '../../types';
-import { QUIZ_COUNT, QUIZ_PASS } from '../../constants';
+import { MAPFIND_COUNT, MAPFIND_PASS, MATCH_MAX_ATTEMPTS, MATCH_PAIRS, QUIZ_COUNT, QUIZ_PASS } from '../../constants';
 
 export const SEOUL: CityDef = {
   id: 'seoul',
@@ -84,12 +84,12 @@ export const SEOUL: CityDef = {
   npcs: [
     {
       id: 'npc_hanbyeol', name: '한별', role: 'guide', at: { tx: 3, ty: 9 }, facing: 'down',
-      missionIds: ['m_seoul_quiz'], cardId: 'card_seoul_geo', bubble: '안녕! 서울이야',
+      missionIds: ['m_seoul_quiz', 'm_seoul_match'], cardId: 'card_seoul_geo', bubble: '안녕! 서울이야',
       idleText: '서울 구경은 잘 하고 있어? 한강 다리를 건너면 남쪽 들판이 나와.',
     },
     {
       id: 'npc_onyu', name: '온유', role: 'teacher', at: { tx: 17, ty: 8 }, facing: 'down',
-      missionIds: ['m_seoul_ox'], bubble: '표지판 읽어 봐',
+      missionIds: ['m_seoul_ox', 'm_seoul_map'], bubble: '표지판 읽어 봐',
       idleText: '경복궁 앞 광장이야. 표지판을 읽으면 서울에 대해 더 알 수 있어.',
     },
     {
@@ -127,6 +127,27 @@ export const SEOUL: CityDef = {
       acceptText: '강 남쪽 들판에 먼지 도깨비가 늘었어. 3마리만 뿅 하고 없애 줄래? F 키로 공격할 수 있어.',
       progressText: '먼지 도깨비는 아직 남아 있어?',
       completeText: '고마워! 덕분에 들판이 깨끗해졌어.',
+    },
+    // v0.2 follow-up missions (spec 8.3, A.1): bonus only — not part of stampMissionIds (spec 14.5)
+    {
+      id: 'm_seoul_match', cityId: 'seoul', giverNpcId: 'npc_hanbyeol', title: '서울 짝맞추기',
+      description: '한별의 카드 6쌍을 14번 안에 모두 맞히기',
+      objective: { type: 'minigame', spec: { kind: 'match', cityId: 'seoul', pairs: MATCH_PAIRS, maxAttempts: MATCH_MAX_ATTEMPTS } },
+      rewardPoints: 30, prerequisiteMissionId: 'm_seoul_quiz',
+      acceptText: '퀴즈 박사에게 다음 도전! 카드를 뒤집어 서울에 대한 짝을 맞춰 봐. 준비되면 다시 말 걸어 줘.',
+      progressText: '짝맞추기에 도전할래?',
+      completeText: '기억력도 최고네! 서울은 이제 눈 감고도 다니겠어.',
+      failText: '카드 위치를 잘 기억해 두고 다시 해 보자.',
+    },
+    {
+      id: 'm_seoul_map', cityId: 'seoul', giverNpcId: 'npc_onyu', title: '세계지도에서 찾기',
+      description: '온유가 말하는 곳을 세계지도에서 5번 중 4번 이상 찾기',
+      objective: { type: 'minigame', spec: { kind: 'mapfind', cityId: 'seoul', count: MAPFIND_COUNT, passCount: MAPFIND_PASS } },
+      rewardPoints: 30, prerequisiteMissionId: 'm_seoul_ox',
+      acceptText: '세계지도에서 서울과 아시아, 바다를 찾을 수 있을까? 준비되면 말 걸어 줘.',
+      progressText: '지도 찾기에 도전할래?',
+      completeText: '세계지도가 머릿속에 들어 있구나! 이제 어느 대륙이든 갈 수 있어.',
+      failText: '세계지도를 다시 보고 대륙 모양을 기억해 봐.',
     },
   ],
   monsterZones: [

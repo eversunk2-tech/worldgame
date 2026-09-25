@@ -45,9 +45,43 @@ export interface CityDef {
   theme: CityTheme; landmarks: LandmarkDef[];
 }
 
-export type MinigameKind = 'quiz' | 'ox'; // 'match' 등은 Stage B에서 확장
-export interface MinigameSpec { kind: MinigameKind; cityId: CityId; topics?: QuizTopic[]; count: number; passCount: number }
-export interface MinigameResult { kind: MinigameKind; success: boolean; correct: number; total: number; answeredIds: string[] }
+// ---------------------------------------------------------------- minigames (spec 7.0)
+export type MinigameKind = 'quiz' | 'ox' | 'match' | 'mapfind' | 'order' | 'blank';
+export type MinigameSpec =
+  | { kind: 'quiz' | 'ox'; cityId: CityId; topics?: QuizTopic[]; count: number; passCount: number }
+  | { kind: 'match'; cityId: CityId; pairs: 6 | 8; maxAttempts: number }
+  | { kind: 'mapfind'; cityId: CityId; count: number; passCount: number }
+  | { kind: 'order'; cityId: CityId; count: number; passCount: number; triesPerQuestion: number }
+  | { kind: 'blank'; cityId: CityId; count: number; passCount: number };
+export interface MinigameResult {
+  kind: MinigameKind; success: boolean; correct: number; total: number; answeredIds: string[];
+  /** only games that grade speed/accuracy set this (match, spec 7.1); bonus = STAR_BONUS[stars ?? 1] */ stars?: 1 | 2 | 3;
+}
+
+/** Map-find answers: a continent or one of the five oceans (spec 7.2, appendix B). */
+export type RegionId = ContinentId | 'pacific' | 'atlantic' | 'indian' | 'arctic' | 'southern';
+/** Memory-match pair: `left` and `right` become two cards (id `<city>_p01`). */
+export interface MatchPair { id: string; cityId: CityId; topic: QuizTopic; left: string; right: string }
+/** Map-find target (id `<city>_t01`): a city marker (radius check) or a region polygon. */
+export interface MapTarget {
+  id: string; cityId: CityId; prompt: string; hint: string;
+  target: { type: 'city'; id: CityId } | { type: 'region'; id: RegionId };
+}
+/** Ordering question (id `<city>_r01`): answer = items sorted by `value` in `direction`. */
+export interface OrderItem {
+  id: string; cityId: CityId; prompt: string; direction: 'asc' | 'desc';
+  items: { label: string; value: number; note?: string }[]; /* 3~5개, value 중복 없음 */ explanation: string;
+}
+/** Fill-in-the-blank sentence (id `<city>_b01`): '[0]', '[1]' mark the blanks, in order. */
+export interface BlankItem {
+  id: string; cityId: CityId; text: string;
+  blanks: { answer: string; options: [string, string, string, string] }[]; /* 1~2개, options에 answer 포함 */ explanation: string;
+}
+/** Everything a minigame may draw items from (filtered by city inside each logic). */
+export interface ContentPool { quiz: QuizItem[]; pairs: MatchPair[]; mapTargets: MapTarget[]; orders: OrderItem[]; blanks: BlankItem[] }
+/** Per-city data file shape for `content/minigames/<city>.ts` (quiz items live in `content/quizzes`). */
+export type MinigameContent = Omit<ContentPool, 'quiz'>;
+
 export type MissionObjective = { type: 'minigame'; spec: MinigameSpec } | { type: 'defeat'; monsterId: string; count: number };
 export interface MissionDef {
   id: string; cityId: CityId; giverNpcId: string; title: string; description: string;
@@ -93,5 +127,6 @@ export interface Progress {
   avatar: AvatarEquip; owned: string[]; room: RoomPlacement[];
   lastCity: CityId | null;
   settings: { muted: boolean };
+  /** quizAnswered/quizCorrect: 4-choice + OX answers only; minigames: minigames cleared (successful runs of any kind) */
   stats: { defeated: number; quizAnswered: number; quizCorrect: number; minigames: number };
 }

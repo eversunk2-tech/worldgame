@@ -7,6 +7,10 @@ import { CityScene } from './scenes/CityScene';
 import { HudScene } from './scenes/HudScene';
 import { QuizScene } from './scenes/minigames/QuizScene';
 import { OxScene } from './scenes/minigames/OxScene';
+import { MatchScene } from './scenes/minigames/MatchScene';
+import { MapFindScene } from './scenes/minigames/MapFindScene';
+import { OrderScene } from './scenes/minigames/OrderScene';
+import { BlankScene } from './scenes/minigames/BlankScene';
 import { AvatarRoomScene } from './scenes/AvatarRoomScene';
 import { DebugAtlasScene } from './scenes/DebugAtlasScene';
 
@@ -23,5 +27,6 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   roundPixels: true,
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   physics: { default: 'arcade', arcade: { debug: false } },
-  scene: [BootScene, TitleScene, WorldMapScene, CityScene, HudScene, QuizScene, OxScene, AvatarRoomScene, DebugAtlasScene],
+  // minigame scenes come after Hud so they draw on top of it
+  scene: [BootScene, TitleScene, WorldMapScene, CityScene, HudScene, QuizScene, OxScene, MatchScene, MapFindScene, OrderScene, BlankScene, AvatarRoomScene, DebugAtlasScene],
 };

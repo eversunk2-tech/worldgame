@@ -23,6 +23,12 @@ import { launchMinigame } from './minigames/MinigameHost';
 
 interface Sign { def: SignDef; sprite: Phaser.GameObjects.Image }
 
+/** City start data. `newMissionIds`: follow-ups that the city.enter dispatch just opened (older saves). */
+export interface CityStartData { cityId: CityId; newMissionIds?: string[] }
+
+/** After a minigame closes, action keys are ignored this long (game-loop clock) so a held Enter/Space cannot act. */
+const RESUME_GRACE_MS = 250;
+
 /** Ground kind under a tile char for the footstep sound (spec 6.5). */
 function groundKind(ch: string | undefined): string {
   switch (ch) {
@@ -53,6 +59,10 @@ export class CityScene extends Phaser.Scene {
   private swingHit = new Set<Monster>();
   private slash!: Phaser.GameObjects.Graphics;
   private cleanupMinigame: (() => void) | null = null;
+  /** game.loop.time until which action keys are ignored (just back from a minigame) */
+  private resumeGraceUntil = 0;
+  /** mission ids to announce as "새 미션" once the HUD exists */
+  private pendingMissionNotices: string[] = [];
   private readonly onProgress = (e: ProgressEvent) => {
     if (e.type === 'avatar.changed') this.player.setAvatarTexture(textureKeyFor(this, session.progress.avatar));
     if (e.type === 'profile.changed') this.player.setDisplayName(e.name);
@@ -63,8 +73,10 @@ export class CityScene extends Phaser.Scene {
     super('City');
   }
 
-  init(data: { cityId: CityId }): void {
+  init(data: CityStartData): void {
     this.cityId = data.cityId;
+    this.pendingMissionNotices = [...(data.newMissionIds ?? [])];
+    this.resumeGraceUntil = 0;
     this.npcs = [];
     this.signs = [];
     this.monsters = [];
@@ -141,7 +153,15 @@ export class CityScene extends Phaser.Scene {
     // HudScene.init() (next frame) keeps this field, so assigning now is safe; re-assign after create() as well
     // in case the HUD instance is ever rebuilt (review Stage A #1).
     this.hud.onEmote = (id) => this.emote(id);
-    this.hud.events.once(Phaser.Scenes.Events.CREATE, () => { this.hud.onEmote = (id) => this.emote(id); });
+    this.hud.events.once(Phaser.Scenes.Events.CREATE, () => {
+      this.hud.onEmote = (id) => this.emote(id);
+      // missions opened by entering (older saves) happened before the HUD existed: announce them once now
+      for (const id of this.pendingMissionNotices) {
+        const m = getMission(id);
+        if (m) this.hud.log(`새 미션: ${m.title}`);
+      }
+      this.pendingMissionNotices = [];
+    });
 
     bgm.play(this.city.theme.bgm);
 
@@ -186,8 +206,10 @@ export class CityScene extends Phaser.Scene {
       return;
     }
 
-    // Consume every key edge each frame (single owner of keyboard edges while in the city).
-    const J = Phaser.Input.Keyboard.JustDown;
+    // Consume every key edge each frame (single owner of keyboard edges while in the city). Auto-repeat keydowns
+    // are not new presses: after a minigame resumes the city (resetKeys), a held key's repeats would otherwise
+    // read as JustDown (review round 2).
+    const J = (k: Phaser.Input.Keyboard.Key) => Phaser.Input.Keyboard.JustDown(k) && !k.originalEvent?.repeat;
     const fJust = J(this.keys.f);
     const eJust = J(this.keys.e) || J(this.keys.space);
     const mJust = J(this.keys.m);
@@ -195,6 +217,7 @@ export class CityScene extends Phaser.Scene {
     const tabJust = J(this.keys.tab);
     const nJust = J(this.keys.n);
     const numJust = this.keys.nums.map((k) => J(k));
+    if (this.game.loop.time < this.resumeGraceUntil) return; // edges consumed, nothing acts right after a minigame
 
     if (tabJust && hudReady) this.hud.toggleMinimap();
     if (nJust) session.setMuted(!session.muted);
@@ -347,6 +370,7 @@ export class CityScene extends Phaser.Scene {
     this.cleanupMinigame = launchMinigame(this, spec, missionId, (result: MinigameResult) => {
       this.cleanupMinigame = null;
       this.inMinigame = false;
+      this.resumeGraceUntil = this.game.loop.time + RESUME_GRACE_MS;
       bgm.duck(1);
       const m = getMission(missionId);
       session.dispatch({ type: 'mission.minigameResult', missionId, result });

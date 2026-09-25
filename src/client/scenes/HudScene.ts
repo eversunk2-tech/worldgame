@@ -1,7 +1,7 @@
 // HUD overlay above City (spec 5.9, 6.3, 6.4): top bar (name/rank/coins/HP), city name + mission tracker + minimap,
 // emote bar, speaker button, dialog / learn card, hint, log. Text objects update only on change.
 import Phaser from 'phaser';
-import type { CityId, EmoteId, LearnCard as LearnCardData } from '../../shared/types';
+import type { CityId, EmoteId, LearnCard as LearnCardData, MinigameSpec } from '../../shared/types';
 import { getCity, getMission, getMonster, getNpc } from '../../shared/content';
 import { CONTINENT_NAMES, getMarker } from '../../shared/content/continents';
 import { getItem } from '../../shared/content/items';
@@ -26,6 +26,18 @@ const OPEN_GRACE_MS = 150;
 
 interface LogLine { text: Phaser.GameObjects.Text; until: number }
 
+/** Short goal for the mission tracker (spec 7, 8.3). */
+export function minigameGoal(spec: MinigameSpec): string {
+  switch (spec.kind) {
+    case 'quiz':
+    case 'ox': return `${spec.count}문제 중 ${spec.passCount}개`;
+    case 'match': return `${spec.pairs}쌍 · ${spec.maxAttempts}번 안에`;
+    case 'mapfind': return `${spec.count}곳 중 ${spec.passCount}곳`;
+    case 'order': return spec.passCount >= spec.count ? `${spec.count}문제 모두` : `${spec.count}문제 중 ${spec.passCount}개`;
+    case 'blank': return `${spec.count}문장 중 ${spec.passCount}개`;
+  }
+}
+
 export class HudScene extends Phaser.Scene {
   private cityId!: CityId;
   private nameText!: Phaser.GameObjects.Text;
@@ -49,6 +61,8 @@ export class HudScene extends Phaser.Scene {
   private lastMissionKey = ' ';
   private lastHp = -1;
   private lastFaint = '';
+  /** city.unlocked names collected during one frame → one merged log line (spec 8.2) */
+  private pendingUnlocks: string[] = [];
   private openedAt = 0;
   private savedUntil = 0;
   private warnedStorage = false;
@@ -76,6 +90,7 @@ export class HudScene extends Phaser.Scene {
     this.lastMissionKey = '\u0000';
     this.lastHp = -1;
     this.lastFaint = '';
+    this.pendingUnlocks = [];
     this.openedAt = 0;
     this.savedUntil = 0;
     this.clock = 0;
@@ -140,6 +155,7 @@ export class HudScene extends Phaser.Scene {
   override update(_time: number, delta: number): void {
     this.clock += Math.min(delta, 100);
     const time = this.clock;
+    if (this.pendingUnlocks.length) this.flushUnlocks();
     if (this.savedUntil && time > this.savedUntil) { this.savedUntil = 0; this.savedText.setVisible(false); }
     for (let i = this.logs.length - 1; i >= 0; i--) {
       const l = this.logs[i]!;
@@ -244,6 +260,15 @@ export class HudScene extends Phaser.Scene {
     this.layoutLogs();
   }
 
+  /** One line for every city opened in the same frame: "파리·카이로·뉴욕·시드니·리우가 열렸어요!" */
+  private flushUnlocks(): void {
+    const names = this.pendingUnlocks;
+    this.pendingUnlocks = [];
+    const last = names[names.length - 1]!;
+    this.log(`${names.join('·')}${josa(last, '이', '가')} 열렸어요!`, THEME.accentCss);
+    sfx.unlock();
+  }
+
   private layoutLogs(): void {
     // logs sit above the dialog box and the emote bar so mission/point messages stay readable while an NPC talks
     const baseY = GAME_HEIGHT - 160;
@@ -272,11 +297,11 @@ export class HudScene extends Phaser.Scene {
     for (const m of city.missions) {
       const prog = p.missions[m.id];
       if (!prog || (prog.status !== 'active' && prog.status !== 'completed')) continue;
-      key += `${m.id}:${prog.status}:${prog.count};`;
+      key += `${m.id}:${prog.status}:${prog.count}:${prog.attempts};`;
       const giver = getNpc(this.cityId, m.giverNpcId)?.name ?? '';
       if (prog.status === 'completed') lines.push(`${m.title}: 완료 — ${giver}에게 보고`);
       else if (m.objective.type === 'defeat') lines.push(`${getMonster(m.objective.monsterId).name} 처치 ${prog.count}/${m.objective.count}`);
-      else lines.push(`${m.title}: ${giver}에게 도전`);
+      else lines.push(`${m.title}: ${giver}에게 ${prog.attempts > 0 ? '다시 ' : ''}도전 (${minigameGoal(m.objective.spec)})`);
     }
     if (key === this.lastMissionKey) return;
     this.lastMissionKey = key;
@@ -291,6 +316,10 @@ export class HudScene extends Phaser.Scene {
         if (e.delta > 0) sfx.coin();
         if (e.delta > 0 && e.reason.startsWith('defeat:')) this.log(`+${e.delta} 포인트 (${getMonster(e.reason.slice(7)).name})`, THEME.accentCss);
         else if (e.delta > 0 && e.reason.startsWith('card:')) this.log(`+${e.delta} 포인트 (학습 카드)`, THEME.accentCss);
+        else if (e.delta > 0 && e.reason.startsWith('stars:')) {
+          const stars = Math.max(1, Math.min(3, Number(e.reason.split(':')[2]) || 1));
+          this.log(`${'★'.repeat(stars)}${'☆'.repeat(3 - stars)} 별점 보너스 +${e.delta} 포인트`, THEME.accentCss);
+        }
         else if (e.delta < 0) this.log(`${e.delta} 포인트`, THEME.textDim);
         break;
       }
@@ -304,7 +333,7 @@ export class HudScene extends Phaser.Scene {
         this.refreshMissions();
         break;
       }
-      case 'city.unlocked': { const n = getMarker(e.cityId).name; this.log(`${n}${josa(n, '이', '가')} 열렸어요!`, THEME.accentCss); sfx.unlock(); break; }
+      case 'city.unlocked': this.pendingUnlocks.push(getMarker(e.cityId).name); break;
       case 'city.stamped': this.log(`${getMarker(e.cityId).name} 도장 획득!`, THEME.accentCss); sfx.stamp(); break;
       case 'item.bought': { const it = getItem(e.itemId); if (it?.unlockStamp) this.log(`기념품 획득: ${it.name}`, THEME.accentCss); break; }
       case 'rank.changed': this.log(`등급 상승: ${e.rank}`, THEME.accentCss); this.refreshProfile(); break;

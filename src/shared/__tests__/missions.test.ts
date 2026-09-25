@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { getCity, getNpc } from '../content';
 import type { ProgressEvent } from '../logic/events';
-import { acceptMission, applyMinigameResult, countDefeat, decideNpcInteraction, turnInMission, unlockDependents } from '../logic/missions';
+import { acceptMission, applyMinigameResult, countDefeat, decideNpcInteraction, resultStars, starBonus, turnInMission, unlockDependents, unlockSatisfied } from '../logic/missions';
 import { createProgress } from '../logic/progress';
 
 const hanbyeol = getNpc('seoul', 'npc_hanbyeol')!;
 const horang = getNpc('seoul', 'npc_horang')!;
 const onyu = getNpc('seoul', 'npc_onyu')!;
+const marie = getNpc('paris', 'npc_marie')!;
 
 describe('decideNpcInteraction', () => {
   it('guide shows the card first, then offers the mission', () => {
@@ -84,17 +85,83 @@ describe('decideNpcInteraction', () => {
     expect(applyMinigameResult(p, 'm_seoul_ox', { kind: 'ox', success: true, correct: 5, total: 5, answeredIds: [] }, ev)).toBe(false);
     acceptMission(p, 'm_seoul_quiz', ev);
     expect(applyMinigameResult(p, 'm_seoul_quiz', { kind: 'ox', success: true, correct: 5, total: 5, answeredIds: [] }, ev)).toBe(false);
-    expect(decideNpcInteraction(p, onyu, 'seoul')).toEqual({ kind: 'talk', text: onyu.idleText });
+    // the OX turn-in opened 온유's follow-up (spec 8.3)
+    expect(decideNpcInteraction(p, onyu, 'seoul')).toEqual({ kind: 'accept', missionId: 'm_seoul_map' });
   });
 
-  it('unlockDependents opens locked missions whose prerequisite was turned in', () => {
+  it('unlockDependents opens only the locked missions that depend on the turned-in one', () => {
     const p = createProgress();
-    // No prerequisites in v0.1 content; simulate one.
-    p.missions.m_paris_ox!.status = 'locked';
+    expect(p.missions.m_seoul_match!.status).toBe('locked');
+    expect(p.missions.m_seoul_map!.status).toBe('locked');
     const ev: ProgressEvent[] = [];
-    unlockDependents(p, 'm_seoul_quiz', ev);
-    expect(p.missions.m_paris_ox!.status).toBe('locked'); // not a dependent
+    unlockDependents(p, 'm_seoul_defeat', ev); // nothing depends on it
     expect(ev).toEqual([]);
-    expect(getCity('paris').missions.every((m) => !m.prerequisiteMissionId)).toBe(true);
+    unlockDependents(p, 'm_seoul_quiz', ev);
+    expect(ev).toEqual([{ type: 'mission.changed', missionId: 'm_seoul_match', status: 'available', count: 0 }]);
+    expect(p.missions.m_seoul_map!.status).toBe('locked');
+    expect(getCity('paris').missions.filter((m) => m.prerequisiteMissionId).map((m) => m.id)).toEqual(['m_paris_blank', 'm_paris_order']);
+  });
+
+  it('unlockSatisfied opens follow-ups whose prerequisite was turned in before they existed (old saves)', () => {
+    const p = createProgress();
+    p.missions.m_seoul_quiz!.status = 'turnedIn'; // e.g. a v0.1 save: the follow-up stayed at its default 'locked'
+    p.missions.m_paris_ox!.status = 'turnedIn';
+    const ev: ProgressEvent[] = [];
+    unlockSatisfied(p, ev);
+    expect(ev).toEqual([
+      { type: 'mission.changed', missionId: 'm_seoul_match', status: 'available', count: 0 },
+      { type: 'mission.changed', missionId: 'm_paris_order', status: 'available', count: 0 },
+    ]);
+    expect(p.missions.m_seoul_map!.status).toBe('locked');
+    const again: ProgressEvent[] = [];
+    unlockSatisfied(p, again);
+    expect(again).toEqual([]);
+  });
+
+  it('follow-up chain: quiz turn-in → match offered → accepted → startMinigame with the match spec', () => {
+    const p = createProgress();
+    p.readCards.push('card_seoul_geo');
+    const ev: ProgressEvent[] = [];
+    acceptMission(p, 'm_seoul_quiz', ev);
+    applyMinigameResult(p, 'm_seoul_quiz', { kind: 'quiz', success: true, correct: 5, total: 5, answeredIds: [] }, ev);
+    expect(ev.at(-1)).toEqual({ type: 'mission.changed', missionId: 'm_seoul_match', status: 'available', count: 0 });
+    expect(decideNpcInteraction(p, hanbyeol, 'seoul')).toEqual({ kind: 'accept', missionId: 'm_seoul_match' });
+    acceptMission(p, 'm_seoul_match', ev);
+    expect(decideNpcInteraction(p, hanbyeol, 'seoul')).toEqual({ kind: 'startMinigame', missionId: 'm_seoul_match', spec: { kind: 'match', cityId: 'seoul', pairs: 6, maxAttempts: 14 } });
+    // 마리 (Paris guide) only offers the blank mission after her quiz
+    p.readCards.push('card_paris_geo');
+    expect(decideNpcInteraction(p, marie, 'paris')).toEqual({ kind: 'accept', missionId: 'm_paris_quiz' });
+  });
+
+  it('star bonus on success: 3★ +10, 2★ +5, 1★ or none +0; stats.minigames counts clears only', () => {
+    expect([starBonus(3), starBonus(2), starBonus(1), starBonus(undefined)]).toEqual([10, 5, 0, 0]);
+    expect(resultStars({ kind: 'match', success: true, correct: 6, total: 6, answeredIds: [], stars: 2 })).toBe(2);
+    expect(resultStars({ kind: 'match', success: true, correct: 6, total: 6, answeredIds: [], stars: 7 as 3 })).toBeUndefined();
+
+    const play = (stars: 1 | 2 | 3 | undefined) => {
+      const p = createProgress();
+      p.missions.m_seoul_match!.status = 'active';
+      const ev: ProgressEvent[] = [];
+      const fail = applyMinigameResult(p, 'm_seoul_match', { kind: 'match', success: false, correct: 3, total: 6, answeredIds: [] }, ev);
+      expect(fail).toBe(true);
+      expect(p.stats.minigames).toBe(0);
+      const r = { kind: 'match' as const, success: true, correct: 6, total: 6, answeredIds: [], ...(stars ? { stars } : {}) };
+      applyMinigameResult(p, 'm_seoul_match', r, ev);
+      return { p, ev };
+    };
+    const star3 = play(3);
+    expect(star3.p.points).toBe(40);
+    expect(star3.p.totalEarned).toBe(40);
+    expect(star3.ev.filter((e) => e.type === 'points.changed')).toEqual([
+      { type: 'points.changed', delta: 30, points: 30, reason: 'mission:m_seoul_match' },
+      { type: 'points.changed', delta: 10, points: 40, reason: 'stars:m_seoul_match:3' },
+    ]);
+    expect(star3.p.stats).toEqual({ defeated: 0, quizAnswered: 0, quizCorrect: 0, minigames: 1 }); // match is not a quiz
+    expect(star3.p.missions.m_seoul_match).toMatchObject({ status: 'turnedIn', count: 6, attempts: 2 });
+    expect(play(2).p.points).toBe(35);
+    expect(play(1).p.points).toBe(30);
+    const none = play(undefined);
+    expect(none.p.points).toBe(30);
+    expect(none.ev.filter((e) => e.type === 'points.changed')).toHaveLength(1);
   });
 });

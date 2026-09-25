@@ -1,11 +1,11 @@
 // World map texture from world-atlas land outlines (spec 5.8): 480×270 render → 2× nearest → 960×540 with a 1px
 // land outline, 30° graticule and the equator. Markers use the same lonLatToXY projection, so positions match v0.1.
+// Stage B review round 2: rings that cross the date line are drawn with continuous longitudes at x offsets −w/0/+w
+// (the canvas clips), instead of jumping across the whole map — that jump filled full-width bands (65–69°N inverted,
+// thin lines at 71°N and 16°S). The same outlines also build a land mask for the map-find answer highlight.
 import Phaser from 'phaser';
-import { feature } from 'topojson-client';
-import type { Topology, GeometryCollection, GeometryObject } from 'topojson-specification';
-import type { Feature, FeatureCollection, MultiPolygon, Polygon, Position } from 'geojson';
-import land110 from 'world-atlas/land-110m.json';
 import { lonLatToXY, WORLD_H, WORLD_W } from '../../shared/content/continents';
+import { landPolygons, landRings } from '../../shared/logic/geo';
 import { TEX } from './manifest';
 import { hex, makeCanvas, registerImage } from './pixelArt';
 
@@ -14,23 +14,34 @@ const LAND = 0x86c46a;
 const OUTLINE = 0x4f8a3f;
 const ICE = 0xe8f1f8;
 
-function ringsOf(geometry: Polygon | MultiPolygon): Position[][] {
-  if (geometry.type === 'Polygon') return geometry.coordinates;
-  return geometry.coordinates.flat();
+/**
+ * Land as one path on a `w`×`h` map: every unwrapped ring drawn 3 times (x − w, x, x + w). `withPolar` adds Antarctica
+ * closed through the pole (for the mask); the texture skips it because the ice band below 60°S covers it.
+ */
+function landPath(w: number, h: number, withPolar: boolean): Path2D {
+  const path = new Path2D();
+  const add = (points: readonly (readonly [number, number])[]) => {
+    for (const dx of [-w, 0, w]) {
+      points.forEach(([lon, lat], i) => {
+        const { x, y } = lonLatToXY([lon, lat], w, h);
+        if (i === 0) path.moveTo(x + dx, y); else path.lineTo(x + dx, y);
+      });
+      path.closePath();
+    }
+  };
+  if (withPolar) for (const poly of landPolygons()) add(poly);
+  else for (const ring of landRings()) if (!ring.polar) add(ring.points);
+  return path;
 }
 
-function landRings(): Position[][] {
-  const topo = land110 as unknown as Topology;
-  const obj = (topo.objects as Record<string, GeometryObject | GeometryCollection>).land;
-  if (!obj) throw new Error('world-atlas: objects.land missing');
-  const out = feature(topo, obj) as Feature | FeatureCollection;
-  const features = out.type === 'FeatureCollection' ? out.features : [out];
-  const rings: Position[][] = [];
-  for (const f of features) {
-    const g = f.geometry;
-    if (g.type === 'Polygon' || g.type === 'MultiPolygon') rings.push(...ringsOf(g));
-  }
-  return rings;
+let landMask: HTMLCanvasElement | null = null;
+
+/**
+ * 480×270 canvas, land opaque white / sea transparent — the same outlines geo.isLand tests (Antarctica included,
+ * the Caspian a hole). Null until createWorldMapTexture ran (or when world-atlas failed and the fallback map is used).
+ */
+export function getWorldLandMask(): HTMLCanvasElement | null {
+  return landMask;
 }
 
 /** Build and register TEX.worldmap. Throws when the data cannot be decoded (Boot falls back to the polygon map). */
@@ -41,16 +52,9 @@ export function createWorldMapTexture(scene: Phaser.Scene): void {
   const sctx = small.ctx;
   sctx.fillStyle = hex(OCEAN);
   sctx.fillRect(0, 0, w, h);
-  const path = new Path2D();
-  for (const ring of landRings()) {
-    ring.forEach(([lon, lat], i) => {
-      const { x, y } = lonLatToXY([lon!, lat!], w, h);
-      if (i === 0) path.moveTo(x, y); else path.lineTo(x, y);
-    });
-    path.closePath();
-  }
+  if (landRings().length === 0) throw new Error('world-atlas: objects.land missing');
   sctx.fillStyle = hex(LAND);
-  sctx.fill(path, 'evenodd');
+  sctx.fill(landPath(w, h, false), 'evenodd');
   // Antarctica: ice below 60°S
   const iceY = lonLatToXY([0, -60], w, h).y;
   sctx.fillStyle = hex(ICE);
@@ -87,4 +91,9 @@ export function createWorldMapTexture(scene: Phaser.Scene): void {
   ctx.strokeStyle = 'rgba(255,255,255,0.2)';
   { const { y } = lonLatToXY([0, 0]); ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(WORLD_W, y + 0.5); ctx.stroke(); }
   registerImage(scene, TEX.worldmap, big.canvas);
+
+  const mask = makeCanvas(w, h);
+  mask.ctx.fillStyle = '#ffffff';
+  mask.ctx.fill(landPath(w, h, true), 'evenodd');
+  landMask = mask.canvas;
 }

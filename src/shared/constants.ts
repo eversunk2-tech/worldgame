@@ -35,9 +35,28 @@ export const CARD_READ_POINTS = 5;
 export const ROOM_COLS = 8;
 export const ROOM_ROWS = 6;
 
-// Minigame defaults
+// Minigame defaults (spec 7, 14.13: fail conditions; retries are unlimited)
 export const QUIZ_COUNT = 5;
 export const QUIZ_PASS = 4;
+export const MATCH_PAIRS = 6;               // 12 cards (4×3)
+export const MATCH_MAX_ATTEMPTS = 14;       // 6 pairs → 14 tries (8 pairs → MATCH_MAX_ATTEMPTS_8)
+export const MATCH_PAIRS_8 = 8;             // 16 cards (4×4)
+export const MATCH_MAX_ATTEMPTS_8 = 20;
+export const MAPFIND_COUNT = 5;
+export const MAPFIND_PASS = 4;
+/**
+ * A city click counts when it lands within this many px of the marker on the 960×540 map (≈ 8.3° of longitude)
+ * AND that marker is the closest of all CITY_MARKERS (review round 2: Seoul/Beijing are 29px, Paris/London 10px apart).
+ * 22px keeps Busan/Jeju (≤ 13px from Seoul) and Edinburgh (16px from London) but not Shanghai (24px) or Tokyo (34px).
+ */
+export const MAPFIND_CITY_RADIUS_PX = 22;
+export const ORDER_COUNT = 2;
+export const ORDER_PASS = 2;
+export const ORDER_TRIES = 2;               // submissions per question before the answer is revealed
+export const BLANK_COUNT = 4;
+export const BLANK_PASS = 3;
+/** Extra points on success by stars (spec 7.0): missions without stars count as 1★ → +0. */
+export const STAR_BONUS: Readonly<Record<1 | 2 | 3, number>> = { 1: 0, 2: 5, 3: 10 };
 
 // ZEP-style presence (spec 6)
 export const EMOTE_SHOW_MS = 2000;   // emoji bubble lifetime

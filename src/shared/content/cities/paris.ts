@@ -1,6 +1,6 @@
 // Paris city content (v0.2 spec A.2). Map rows are 30 × 40 chars, legend in content/tiles.ts (27 kinds).
 import type { CityDef } from '../../types';
-import { QUIZ_COUNT, QUIZ_PASS } from '../../constants';
+import { BLANK_COUNT, BLANK_PASS, ORDER_COUNT, ORDER_PASS, ORDER_TRIES, QUIZ_COUNT, QUIZ_PASS } from '../../constants';
 
 export const PARIS: CityDef = {
   id: 'paris',
@@ -88,12 +88,12 @@ export const PARIS: CityDef = {
   npcs: [
     {
       id: 'npc_marie', name: '마리', role: 'guide', at: { tx: 36, ty: 8 }, facing: 'down',
-      missionIds: ['m_paris_quiz'], cardId: 'card_paris_geo', bubble: '봉주르!',
+      missionIds: ['m_paris_quiz', 'm_paris_blank'], cardId: 'card_paris_geo', bubble: '봉주르!',
       idleText: '봉주르! 파리에 온 걸 환영해. 센강 다리를 건너면 에펠탑이 보여.',
     },
     {
       id: 'npc_louis', name: '루이', role: 'teacher', at: { tx: 27, ty: 7 }, facing: 'down',
-      missionIds: ['m_paris_ox'], bubble: '루브르야!',
+      missionIds: ['m_paris_ox', 'm_paris_order'], bubble: '루브르야!',
       idleText: '여기는 루브르 박물관이야. 모나리자가 이 안에 있지.',
     },
     {
@@ -132,6 +132,27 @@ export const PARIS: CityDef = {
       acceptText: '에펠탑 공원에 심술 비둘기가 너무 많아. 3마리만 쫓아내 줄래? F 키로 공격할 수 있어.',
       progressText: '비둘기는 아직 남아 있어?',
       completeText: '메르시! 덕분에 공원이 조용해졌어.',
+    },
+    // v0.2 follow-up missions (spec 8.3, A.2): bonus only — not part of stampMissionIds (spec 14.5)
+    {
+      id: 'm_paris_blank', cityId: 'paris', giverNpcId: 'npc_marie', title: '파리 빈칸 채우기',
+      description: '마리의 문장 4개 중 3개 이상 빈칸 채우기',
+      objective: { type: 'minigame', spec: { kind: 'blank', cityId: 'paris', count: BLANK_COUNT, passCount: BLANK_PASS } },
+      rewardPoints: 30, prerequisiteMissionId: 'm_paris_quiz',
+      acceptText: '이번엔 문장의 빈칸을 채워 볼까? 보기 중에서 알맞은 말을 골라 봐.',
+      progressText: '빈칸 채우기에 도전할래?',
+      completeText: '파르페(완벽해)! 파리를 문장으로도 설명할 수 있구나.',
+      failText: '표지판의 문장을 다시 읽어 보고 도전해 봐.',
+    },
+    {
+      id: 'm_paris_order', cityId: 'paris', giverNpcId: 'npc_louis', title: '순서대로 맞추기',
+      description: '루이의 순서 문제 2개를 모두 맞히기(문제당 2번까지)',
+      objective: { type: 'minigame', spec: { kind: 'order', cityId: 'paris', count: ORDER_COUNT, passCount: ORDER_PASS, triesPerQuestion: ORDER_TRIES } },
+      rewardPoints: 30, prerequisiteMissionId: 'm_paris_ox',
+      acceptText: '박물관답게 순서 문제야. 오래된 것부터, 가까운 것부터 늘어놓아 봐.',
+      progressText: '순서 맞추기에 도전할래?',
+      completeText: '역사와 지리를 한 줄로 꿰었구나. 브라보!',
+      failText: '카드 아래 숫자를 떠올리며 다시 해 보자.',
     },
   ],
   monsterZones: [

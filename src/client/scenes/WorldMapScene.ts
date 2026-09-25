@@ -209,9 +209,11 @@ export class WorldMapScene extends Phaser.Scene {
   private tryEnter(view: MarkerView): void {
     const state = cityState(session.progress, view.marker);
     if (state === 'open' || state === 'stamped') {
-      session.dispatch({ type: 'city.enter', cityId: view.marker.cityId });
+      const events = session.dispatch({ type: 'city.enter', cityId: view.marker.cityId });
+      // follow-up missions this entry opened (older saves) are announced by the City's HUD (Stage B review round 2)
+      const newMissionIds = events.flatMap((e) => (e.type === 'mission.changed' && e.status === 'available' ? [e.missionId] : []));
       this.input.setDefaultCursor('default');
-      this.scene.start('City', { cityId: view.marker.cityId });
+      this.scene.start('City', { cityId: view.marker.cityId, newMissionIds });
       return;
     }
     this.showTooltip(view);
